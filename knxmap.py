@@ -36,11 +36,12 @@ def main():
             for b in range (10,12):
                 for c in range (100):
                     l.put(str(a)+"."+str(b)+"."+str(c))
+
         jobs = []
         for a in range(40):
             p = multiprocessing.Process(target=worker, args=(d,l,a))
             jobs.append(p)
-            p.start()
+            p.start
 
         for a in jobs:
             a.join()
