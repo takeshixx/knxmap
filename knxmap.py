@@ -4,7 +4,7 @@ import time
 import sys
 import subprocess
 
-import knxlib
+import libknx
 
 
 def worker(d,l,thread_number):

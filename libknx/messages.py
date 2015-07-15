@@ -1,6 +1,6 @@
 # Placeholder for all the packages
 import struct
-import knxlib.utils
+import libknx.utils
 
 __all__ = ['KnxMessage']
 
@@ -44,14 +44,14 @@ class KnxMessage(object):
 
 
     def set_source_ip(self, address):
-        if knxlib.utils.is_valid_knx_bus_address(address):
+        if libknx.utils.is_valid_knx_bus_address(address):
             # TODO: Add proper address format
             _address = struct.pack('>I', 'asd')
             self.source = _address
 
 
     def set_destination_ip(self, address):
-        if knxlib.utils.is_valid_knx_bus_address(address):
+        if libknx.utils.is_valid_knx_bus_address(address):
             # TODO: Add proper address format
             _address = struct.pack('>I', 'asd')
             self.destination = _address
