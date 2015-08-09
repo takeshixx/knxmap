@@ -1,12 +1,13 @@
 # Utilities to create KNX messages
 import struct
 import socket
+import io
 import libknx.utils
 
 __all__ = ['KnxSearchRequest', 'KnxConnectionRequest']
 
 
-knx_message_types = {
+knx_message_types_maps = {
     'search_request': '\x02\x01',
     'connection_request': '\x02\x05',
     'connection_response': '\x02\x06',
@@ -14,33 +15,43 @@ knx_message_types = {
     'tunneling_ack': '\x03\x11'
 }
 
-knx_message_skeleton = [
-    '\x06',              # head length - 1 byte
-    '\x10',              # protocol version - 1 byte
-    '{service_type}',    # service type a.k.a. message type - 2 bytes
-    '{total_length}',    # total length - 2 bytes
-    '{structure_length}',# structure length - 1 byte
-    '\x01',              # host protocol code - 1 byte
-    '{source}',          # source address - 4 bytes
-    '\xff\xff',          # randomy bytes - 2 bytes
-    '\x08',              # structure length 2 - 1 byte
-    '\x01',              # host protocol code 2 - 1 byte
-    '{destination}',     # destination address - 4 bytes
-    '\xff\xff',          # random bytes 2 - 2 bytes
-    '\x02',              # structure length 3 - 1 byte
-    '\x04'               # connection type - 1 byte
-]
+knx_message_types = {
+    0x0201: 'SEARCH_REQUEST',
+    0x0202: 'SEARCH_RESPONSE',
+    0x0205: 'CONNECT_REQUEST',
+    0x0206: 'CONNECT_RESPONSE',
+    0x0420: 'TUNNEL_REQUEST',
+    0x0311: 'TUNNEL_ACK'
+}
+
+knx_service_families = {
+  0x02: 'KNXnet/IP Core',
+  0x03: 'KNXnet/IP Device Management',
+  0x04: 'KNXnet/IP Tunnelling',
+  0x05: 'KNXnet/IP Routing',
+  0x06: 'KNXnet/IP Remote Logging',
+  0x08: 'KNXnet/IP Object Server',
+  0x07: 'KNXnet/IP Remote Configuration and Diagnosis'
+}
+
 
 class KnxMessage(object):
+    header = {
+        'header_length': 0x06,
+        'protocol_version': 0x10,
+        'service_type': None,
+        'total_length': None
+    }
+    body = {}
     message = None
 
     def set_source_ip(self, address):
-        if libknx.utils.is_valid_knx_bus_address(address):
-            self.source = socket.inet_aton(address)
+        #if libknx.utils.is_valid_knx_bus_address(address):
+        self.source = address
 
     def set_destination_ip(self, address):
-        if libknx.utils.is_valid_knx_bus_address(address):
-            self.destination = socket.inet_aton(address)
+        #if libknx.utils.is_valid_knx_bus_address(address):
+        self.destination = socket.inet_aton(address)
 
     def get_message(self):
         return self.message if self.message else False
@@ -50,84 +61,289 @@ class KnxMessage(object):
         # TODO: Implement more reliable method, maybe with iproute2 tools
         return socket.gethostbyname(socket.gethostname())
 
+    @staticmethod
+    def parse_knx_address(address):
+        address = address[0] if isinstance(address, (list, tuple)) else False
+        return '{}.{}.{}'.format(((address & 0xf000) >>12 ), ((address & 0xf00) >> 8), (address & 0xff))
+
+    def _pack_knx_header(self):
+        try:
+            return struct.pack('>BBHH',
+                               self.header.get('header_length'),
+                               self.header.get('protocol_version'),
+                               self.header.get('service_type'),
+                               self.header.get('total_length')
+                               )
+        except struct.error as e:
+            print(e)
+            return False
+
+    def _unpack_knx_header(self, message):
+        """Set self.header dict and return message body"""
+        try:
+            self.header['header_length'], \
+            self.header['protocol_version'], \
+            self.header['service_type'], \
+            self.header['total_length'] = struct.unpack('>BBHH', message[:6])
+            return message[6:]
+        except struct.error as e:
+            print(e)
+            return False
+
+
+    def _unpack_stream(self, fmt, stream):
+        buf = stream.read(struct.calcsize(fmt))
+        return struct.unpack(fmt, buf)[0]
+
+
+    def _parse_knx_body_hpai(self, message):
+        try:
+            self.body['hpai'] = {}
+            self.body['hpai']['structure_length'], \
+            self.body['hpai']['protocol_code'], \
+            self.body['hpai']['ip_address'], \
+            self.body['hpai']['port'] = struct.unpack('>BBHH', message[:8])
+            self.body['hpai']['ip_address'] = socket.inet_aton(self.body['hpai']['ip_address']) # most likely not works
+            return message[8:]
+        except struct.error as e:
+            print(e)
+            return False
+
+class KnxDescriptionDummy(KnxMessage):
+
+    def __init__(self, message=None, port=55772):
+        self.port = port
+        if message:
+            pass
+        else:
+            pass
+
+    def pack_knx_message(self):
+        self.message = self._pack_knx_header()
+        self.message += self._pack_knx_body()
+
+    def _pack_knx_body(self):
+        pass
+
+    def _unpack_knx_body(self, message):
+        pass
+
 
 class KnxSearchRequest(KnxMessage):
-    knx_message_skeleton = [
-        # header
-        '\x06',              # head length - 1 byte
-        '\x10',              # protocol version - 1 byte
-        '{service_type}',    # service type a.k.a. message type - 2 bytes
-        '{total_length}',    # total length - 2 bytes
-        # body
-        '{structure_length}',# structure length - 1 byte
-        '\x01',              # host protocol code - 1 byte
-        '{source}',          # source address - 4 bytes
-        '{port}'             # randomy bytes - 2 bytes
-    ]
 
-    def __init__(self, source=None, port=55290):
-        self.type = knx_message_types.get('search_request')
-        self.total_length = struct.pack('>I', 14)
-        self.structure_length = struct.pack('>I', 8)
-        self.port = struct.pack('>I', port)
-
-        if source:
-            self.set_source_ip(source)
+    def __init__(self, message=None, port=55772):
+        self.port = port
+        if message:
+            # parse a message
+            message = self._unpack_knx_header(message)
+            self._unpack_knx_body(message)
         else:
+            # create new message
+            self.header['service_type'] = 0x0201
+            self.header['total_length'] = 14
             self.set_source_ip(self.get_host_ip_address())
 
-        if self.source:
-            self.prepare_message()
+    def pack_knx_message(self):
+        self.message = self._pack_knx_header()
+        self.message += self._pack_knx_body()
 
-    def prepare_message(self):
-        self.message = self.knx_message_skeleton.format(
-            service_type=self.type,
-            total_length=self.total_length,
-            structure_length=self.structure_length,
-            source=self.source,
-            port=self.port
-        )
+    def _pack_knx_body(self):
+        self.body = struct.pack('>B', 8) # structure_length
+        self.body += struct.pack('>B', 0x01) # protocol code
+        self.body += socket.inet_aton(self.source)
+        self.body += struct.pack('>H', self.port)
+        return self.body
+
+    def _unpack_knx_body(self, message):
+        message = io.StringIO(message)
+        self.body['structure_length'] = self._unpack_stream('>B', message)
+        self.body['protocol_code'] = self._unpack_stream('>B', message)
+        self.body['ip_address'] = socket.inet_ntoa(message.read(4))
+        self.body['port'] = self._unpack_stream('H', message)
+
+
+class KnxSearchResponse(KnxMessage):
+
+    def __init__(self, message=None):
+        if message:
+            message = self._unpack_knx_header(message)
+            self._unpack_knx_body(message)
+        else:
+            self.header['service_type'] = 0x0202
+
+    def pack_knx_message(self):
+        pass
+
+    def _pack_knx_body(self):
+        pass
+
+    def _unpack_knx_body(self, message):
+        message = io.BytesIO(message)
+        self.body['hpai'] = {}
+        self.body['hpai']['structure_length'] = self._unpack_stream('>B', message)
+        self.body['hpai']['protocol_code'] = self._unpack_stream('>B', message)
+        self.body['hpai']['ip_address'] = socket.inet_ntoa(message.read(4))
+        self.body['hpai']['port'] = self._unpack_stream('>H', message)
+
+        self.body['dib_dev_info'] = {}
+        self.body['dib_dev_info']['structure_length'] = self._unpack_stream('>B', message)
+        self.body['dib_dev_info']['description_type'] = self._unpack_stream('>B', message)
+        self.body['dib_dev_info']['knx_medium'] = self._unpack_stream('>B', message)
+        self.body['dib_dev_info']['device_status'] = self._unpack_stream('>B', message)
+        self.body['dib_dev_info']['knx_address'] = self.parse_knx_address(self._unpack_stream('>H', message))
+        self.body['dib_dev_info']['project_install_identifier'] = self._unpack_stream('>H', message)
+        self.body['dib_dev_info']['knx_device_serial'] = self._unpack_stream('>6B', message)
+        self.body['dib_dev_info']['knx_dev_multicast_address'] = self._unpack_stream('>I', message)
+        self.body['dib_dev_info']['knx_mac_address'] = self._unpack_stream('>6B', message)
+        self.body['dib_dev_info']['device_friendly_name'] = self._unpack_stream('>30B', message)
+
+        self.body['dib_supp_sv_families'] = {}
+        self.body['dib_supp_sv_families']['structure_length'] = self._unpack_stream('>B', message)
+        self.body['dib_supp_sv_families']['description_type'] = self._unpack_stream('>B', message)
+        self.body['dib_supp_sv_families']['families'] = {}
+
+        for i in range(int((self.body['dib_supp_sv_families']['structure_length']-2)/2)):
+            service_id = self._unpack_stream('>B', message)
+            version = self._unpack_stream('>B', message)
+            self.body['dib_supp_sv_families']['families'][service_id] = {}
+            self.body['dib_supp_sv_families']['families'][service_id]['version'] = version
+
+
+class KnxDescriptionRequest(KnxMessage):
+
+    def __init__(self, message=None, port=55772):
+        self.port = port
+        if message:
+            pass
+        else:
+            self.header['service_type'] = 0x0203
+            self.header['total_length'] = 14
+            self.set_source_ip(self.get_host_ip_address())
+
+    def pack_knx_message(self):
+        self.message = self._pack_knx_header()
+        self.message += self._pack_knx_body()
+
+    def _pack_knx_body(self):
+        self.body = struct.pack('>B', 8) # structure_length
+        self.body += struct.pack('>B', 0x01) # protocol code
+        self.body += socket.inet_aton(self.source)
+        self.body += struct.pack('>H', self.port)
+        return self.body
+
+    def _unpack_knx_body(self, message):
+        pass
+
+
+class KnxDescriptionResponse(KnxMessage):
+
+    def __init__(self, message=None):
+        if message:
+            message = self._unpack_knx_header(message)
+            self._unpack_knx_body(message)
+        else:
+            self.header['service_type'] = 0x0204
+
+    def pack_knx_message(self):
+        self.message = self._pack_knx_header()
+        self.message += self._pack_knx_body()
+
+    def _pack_knx_body(self):
+        pass
+
+    def _unpack_knx_body(self, message):
+        message = io.BytesIO(message)
+        self.body['dib_dev_info'] = {}
+        self.body['dib_dev_info']['structure_length'] = self._unpack_stream('>B', message)
+        self.body['dib_dev_info']['description_type'] = self._unpack_stream('>B', message)
+        self.body['dib_dev_info']['knx_medium'] = self._unpack_stream('>B', message)
+        self.body['dib_dev_info']['device_status'] = self._unpack_stream('>B', message)
+        self.body['dib_dev_info']['knx_address'] = self.parse_knx_address(self._unpack_stream('>H', message))
+        self.body['dib_dev_info']['project_install_identifier'] = self._unpack_stream('>H', message)
+        self.body['dib_dev_info']['knx_device_serial'] = self._unpack_stream('>6B', message)
+        self.body['dib_dev_info']['knx_dev_multicast_address'] = self._unpack_stream('>I', message)
+        self.body['dib_dev_info']['knx_mac_address'] = self._unpack_stream('>6B', message)
+        self.body['dib_dev_info']['device_friendly_name'] = self._unpack_stream('>30B', message)
+
+        self.body['dib_supp_sv_families'] = {}
+        self.body['dib_supp_sv_families']['structure_length'] = self._unpack_stream('>B', message)
+        self.body['dib_supp_sv_families']['description_type'] = self._unpack_stream('>B', message)
+        self.body['dib_supp_sv_families']['families'] = {}
+
+        for i in range(int((self.body['dib_supp_sv_families']['structure_length']-2)/2)):
+            service_id = self._unpack_stream('>B', message)
+            version = self._unpack_stream('>B', message)
+            self.body['dib_supp_sv_families']['families'][service_id] = {}
+            self.body['dib_supp_sv_families']['families'][service_id]['version'] = version
 
 
 class KnxConnectionRequest(KnxMessage):
-    knx_message_skeleton = [
-        # header
-        '\x06',              # head length - 1 byte
-        '\x10',              # protocol version - 1 byte
-        '{service_type}',    # service type a.k.a. message type - 2 bytes
-        '{total_length}',    # total length - 2 bytes
-        # body
+
+    def __init__(self, message=None, port=55772):
+        self.port = port
+        if message:
+            message = self._unpack_knx_header(message)
+            self._unpack_knx_body(message)
+        else:
+            self.header['service_type'] = 0x0205
+            self.header['total_length'] = 26
+            self.set_source_ip(self.get_host_ip_address())
+
+    def pack_knx_message(self):
+        self.message = self._pack_knx_header()
+        self.message += self._pack_knx_body()
+
+    def _pack_knx_body(self):
         # discovery endpoint
-        '\x08',              # structure length - 1 byte
-        '\x01',              # host protocol code - 1 byte
-        '{source}',          # source address - 4 bytes
-        '{port}',
+        self.body = struct.pack('>B', 8) # structure_length
+        self.body += struct.pack('>B', 0x01) # protocol code
+        self.body += socket.inet_aton(self.source)
+        self.body += struct.pack('>H', self.port)
         # data endpoint
-        '\x08',              # structure length - 1 byte
-        '\x01',              # host protocol - 1 byte
-        '{source}',
-        '{endpoint_port}',
+        self.body += struct.pack('>B', 8) # structure_length
+        self.body += struct.pack('>B', 0x01) # protocol code
+        self.body += socket.inet_aton(self.source)
+        self.body += struct.pack('>H', self.port+1)
         # connection request information
-        '\x04',              # structure length
-        '\x04',              # connection type
-        '\x02',             # KNX layer
-        '\x00'              # reserved
-    ]
+        self.body += struct.pack('>B', 4) # structure_length
+        self.body += struct.pack('>B', 0x04) # connection type
+        self.body += struct.pack('>B', 0x02) # knx layer, TUNNEL_LINKLAYER
+        self.body += struct.pack('>B', 0x00) # reserved
+        return self.body
 
-    def __init__(self, port=55291):
-        self.type = knx_message_types.get('connection_request')
-        self.total_length = struct.pack('>I', 26)
-
-        self.set_source_ip(self.get_host_ip_address())
-        self.port = struct.pack('>I', port)
-        self.endpoint_port = struct.pack('>I', port+1)
+    def _unpack_knx_body(self):
+        pass
 
 
-    def prepare_message(self):
-        self.message = self.knx_message_skeleton.format(
-            service_type=self.type,
-            total_length=self.total_length,
-            source=self.source,
-            port=self.port,
-            endpoint_port=self.endpoint_port
-        )
+class KnxConnectionResponse(KnxMessage):
+
+    def __init__(self, message=None):
+        if message:
+            message = self._unpack_knx_header(message)
+            self._unpack_knx_body(message)
+        else:
+            self.header['service_type'] = 0x0206
+            self.header['total_length'] = 20
+            self.set_source_ip(self.get_host_ip_address())
+
+    def pack_knx_message(self):
+        pass
+
+    def _pack_knx_body(self):
+        pass
+
+    def _unpack_knx_body(self, message):
+        message = io.BytesIO(message)
+        self.body['communication_channel_id'] = self._unpack_stream('>B', message)
+        self.body['status'] = self._unpack_stream('>B', message)
+
+        self.body['hpai'] = {}
+        self.body['hpai']['structure_length'] = self._unpack_stream('>B', message)
+        self.body['hpai']['protocol_code'] = self._unpack_stream('>B', message)
+        self.body['hpai']['ip_address'] = socket.inet_ntoa(message.read(4))
+        self.body['hpai']['port'] = self._unpack_stream('>H', message)
+
+        self.body['data_block'] = {}
+        self.body['data_block']['structure_length'] = self._unpack_stream('>B', message)
+        self.body['data_block']['connection_type'] = self._unpack_stream('>B', message)
+        self.body['data_block']['knx_address'] = self.parse_knx_address(self._unpack_stream('>H', message))
