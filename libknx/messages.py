@@ -6,22 +6,38 @@ import libknx.utils
 
 __all__ = ['KnxSearchRequest', 'KnxConnectionRequest']
 
-
-knx_message_types_maps = {
-    'search_request': '\x02\x01',
-    'connection_request': '\x02\x05',
-    'connection_response': '\x02\x06',
-    'tunneling_request': '\x04\x20',
-    'tunneling_ack': '\x03\x11'
+knx_constants = {
+    'KNXNETIP_VERSION_10': 0x10,
+    'HEADER_SIZE_10': 0x06
 }
 
 knx_message_types = {
+    # KNXnet/IP-Core-Services
     0x0201: 'SEARCH_REQUEST',
     0x0202: 'SEARCH_RESPONSE',
+    0x0203: 'DESCRIPTION_REQUEST',
+    0x0204: 'DESCRIPTION_RESPONSE',
     0x0205: 'CONNECT_REQUEST',
     0x0206: 'CONNECT_RESPONSE',
-    0x0420: 'TUNNEL_REQUEST',
-    0x0311: 'TUNNEL_ACK'
+    0x0207: 'CONNECTIONSTATE_REQUEST',
+    0x0208: 'CONNECTIONSTATE_RESPONSE',
+    0x0209: 'DISCONNECT_REQUEST',
+    0x020a: 'DISCONNECT_RESPONSE',
+    # Device-Management-Services
+    0x0310: 'DEVICE_CONFIGURATION_REQUEST',
+    0x0311: 'DEVICE_CONFIGURATION_REQUEST',
+    # Tunnelling-Services
+    0x0420: 'TUNNELLING_REQUEST',
+    0x0421: 'TUNNELLING_ACK',
+    # Routing-Services
+    0x0530: 'ROUTING_INDICATION',
+    0x0531: 'ROUTING_LOST_MESSAGE',
+    0x0532: 'ROUTING_BUSY',
+    # Remoting-and-Configuration
+    0x0740: 'REMOTE_DIAGNOSTIC_REQUEST',
+    0x0741: 'REMOTE_DIAGNOSTIC_RESPONSE',
+    0x0742: 'REMOTE_BASIC_CONFIGURATION_REQUEST',
+    0x0743: 'REMOTE_RESET_REQUEST'
 }
 
 knx_service_families = {
@@ -32,6 +48,23 @@ knx_service_families = {
   0x06: 'KNXnet/IP Remote Logging',
   0x08: 'KNXnet/IP Object Server',
   0x07: 'KNXnet/IP Remote Configuration and Diagnosis'
+}
+
+knx_status_codes = {
+    0x00: 'E_NO_ERROR',
+    0x01: 'E_HOST_PROTOCOL_TYPE',
+    0x02: 'E_VERSION_NOT_SUPPORTED',
+    0x04: 'E_SEQUENCE_NUMBER',
+    # CONNECT_RESPONSE status codes
+    0x22: 'E_CONNECTION_TYPE', # requested connection type not supported
+    0x23: 'E_CONNECTION_OPTION', # one or more connection options not supported
+    0x24: 'E_NO_MORE_CONNECTIONS', # max amount of connections reached,
+    # CONNECTIONSTATE_RESPONSE status codes
+    0x21: 'E_CONNECTION_ID',
+    0x26: 'E_DATA_CONNECTION',
+    0x27: 'E_KNX_CONNECTION',
+    # CONNECT_ACK status codes
+    0x29: 'E_TUNNELLING_LAYER'
 }
 
 
@@ -92,8 +125,12 @@ class KnxMessage(object):
 
 
     def _unpack_stream(self, fmt, stream):
-        buf = stream.read(struct.calcsize(fmt))
-        return struct.unpack(fmt, buf)[0]
+        try:
+            buf = stream.read(struct.calcsize(fmt))
+            return struct.unpack(fmt, buf)[0]
+        except struct.error as e:
+            print(e)
+            return
 
 
     def _parse_knx_body_hpai(self, message):
@@ -303,7 +340,7 @@ class KnxConnectionRequest(KnxMessage):
         self.body += struct.pack('>B', 8) # structure_length
         self.body += struct.pack('>B', 0x01) # protocol code
         self.body += socket.inet_aton(self.source)
-        self.body += struct.pack('>H', self.port+1)
+        self.body += struct.pack('>H', self.port)
         # connection request information
         self.body += struct.pack('>B', 4) # structure_length
         self.body += struct.pack('>B', 0x04) # connection type
@@ -316,6 +353,7 @@ class KnxConnectionRequest(KnxMessage):
 
 
 class KnxConnectionResponse(KnxMessage):
+    ERROR = None
 
     def __init__(self, message=None):
         if message:
@@ -334,16 +372,97 @@ class KnxConnectionResponse(KnxMessage):
 
     def _unpack_knx_body(self, message):
         message = io.BytesIO(message)
-        self.body['communication_channel_id'] = self._unpack_stream('>B', message)
-        self.body['status'] = self._unpack_stream('>B', message)
+        try:
+            self.body['communication_channel_id'] = self._unpack_stream('>B', message)
+            self.body['status'] = self._unpack_stream('>B', message)
 
-        self.body['hpai'] = {}
-        self.body['hpai']['structure_length'] = self._unpack_stream('>B', message)
-        self.body['hpai']['protocol_code'] = self._unpack_stream('>B', message)
-        self.body['hpai']['ip_address'] = socket.inet_ntoa(message.read(4))
-        self.body['hpai']['port'] = self._unpack_stream('>H', message)
+            if self.body['status'] != 0x00:
+                # the device encountered an error!
+                # TODO: implement some kind of retries and waiting periods
+                self.ERROR = knx_status_codes[self.body['status']]
+                print('KnxConnectionResponse ERROR: {}'.format(self.ERROR))
+                return
 
-        self.body['data_block'] = {}
-        self.body['data_block']['structure_length'] = self._unpack_stream('>B', message)
-        self.body['data_block']['connection_type'] = self._unpack_stream('>B', message)
-        self.body['data_block']['knx_address'] = self.parse_knx_address(self._unpack_stream('>H', message))
+            self.body['hpai'] = {}
+            self.body['hpai']['structure_length'] = self._unpack_stream('>B', message)
+            self.body['hpai']['protocol_code'] = self._unpack_stream('>B', message)
+            self.body['hpai']['ip_address'] = socket.inet_ntoa(message.read(4))
+            self.body['hpai']['port'] = self._unpack_stream('>H', message)
+
+            self.body['data_block'] = {}
+            self.body['data_block']['structure_length'] = self._unpack_stream('>B', message)
+            self.body['data_block']['connection_type'] = self._unpack_stream('>B', message)
+            self.body['data_block']['knx_address'] = self.parse_knx_address(self._unpack_stream('>H', message))
+        except Exception as e:
+            print(e)
+            print(message.read())
+            return
+
+
+class KnxTunnellingRequest(KnxMessage):
+
+    def __init__(self, message=None, port=None, communication_channel=None):
+        self.port = port
+        self.communication_channel = communication_channel
+        if message:
+            message = self._unpack_knx_header(message)
+            self._unpack_knx_body(message)
+        else:
+            self.header['service_type'] = 0x0420
+            self.header['total_length'] = 21
+            self.set_source_ip(self.get_host_ip_address())
+
+    def pack_knx_message(self):
+        self.message = self._pack_knx_header()
+        self.message += self._pack_knx_body()
+
+    def _pack_knx_body(self):
+        # discovery endpoint
+        self.body = struct.pack('>B', 4) # structure_length
+        self.body += struct.pack('>B', self.communication_channel) # channel id
+        self.body += struct.pack('>B', 0) # sequence counter
+        self.body += struct.pack('>B', 0) # reserved
+        # cEMI (?)
+        self.body += struct.pack('>B', 0x11) # message code
+        self.body += struct.pack('>B', 0) # add information length
+        self.body += struct.pack('>B', 0xbc) # controlfield 1
+        self.body += struct.pack('>B', 0xf0) # controlfield 2
+        self.body += struct.pack('>H', 0x0000) # source address (KNX address)
+        self.body += struct.pack('>H', 0x0001) # destination address (KNX address)
+        self.body += struct.pack('>B', 0x01) # NPDU length
+        self.body += struct.pack('>B', 0x00) # TPCI: UDT (?)
+        self.body += struct.pack('>B', 0x81) # APCI (?)
+        return self.body
+
+    def _unpack_knx_body(self):
+        pass
+
+
+class KnxTunnellingAck(KnxMessage):
+
+    def __init__(self, message=None):
+        if message:
+            message = self._unpack_knx_header(message)
+            self._unpack_knx_body(message)
+        else:
+            self.header['service_type'] = 0x0421
+            self.header['total_length'] = 10
+            self.set_source_ip(self.get_host_ip_address())
+
+    def pack_knx_message(self):
+        pass
+
+    def _pack_knx_body(self):
+        pass
+
+    def _unpack_knx_body(self, message):
+        message = io.BytesIO(message)
+        try:
+            self.body['structure_length'] = self._unpack_stream('>B', message)
+            self.body['communication_channel_id'] = self._unpack_stream('>B', message)
+            self.body['sequence_counter'] = self._unpack_stream('>B', message)
+            self.body['status'] = self._unpack_stream('>B', message)
+        except Exception as e:
+            print(e)
+            print(message.read())
+            return
