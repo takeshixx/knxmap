@@ -1,225 +1,337 @@
-#! /usr/bin/env python2
-import multiprocessing
+#! /usr/bin/env python3
 import time
 import sys
-import subprocess
+import argparse
+import logging
 import socket
 
-import struct
-
 import libknx
-import libknx.messages
 
-import functools
+# asyncio requires at least Python 3.3
+if sys.version_info.major < 3 and \
+    sys.version_info.minor < 3:
+    print('At least Python version 3.3 is required to run this script!')
+    sys.exit(1)
 
-import asyncio
+# Python 3.4 ships with asyncio in the standard libraries. Users with Python 3.3
+# need to install it, e.g.: pip install asyncio
+try:
+    import asyncio
+except ImportError:
+    print('Please install the asyncio module!')
+    sys.exit(1)
 
 try:
-    # Python 3.4.
+    # Python 3.4
     from asyncio import JoinableQueue as Queue
 except ImportError:
-    # Python 3.5.
+    # Python 3.5 renamed it to Queue
     from asyncio import Queue
 
+# Check if the ipaddress module is available for better target parsing support.
+MOD_IPADDRESS = False
+try:
+    import ipaddress
+    MOD_IPADDRESS = True
+except ImportError:
+    pass
 
-KNX_UDP_PORT = 3671
+LOGGER = logging.getLogger(__name__)
+
+ARGS = argparse.ArgumentParser(description="KNX Scanner")
+ARGS.add_argument(
+    'targets', nargs='*',
+    default=[], help='Target hostnames/IP addresses')
+ARGS.add_argument(
+    '-v', '--verbose', action='count', dest='level',
+    default=2, help='Verbose logging (repeat for more verbose)')
+ARGS.add_argument(
+    '-q', '--quiet', action='store_const', const=0, dest='level',
+    default=2, help='Only log errors')
+ARGS.add_argument(
+    '-p', '--port', action='store_const', const=3671, dest='port',
+    default=3671, help='UDP port to be scanned')
+ARGS.add_argument(
+    '-sG', '--search', action='store_true', dest='search',
+    default=False, help='Find local KNX gateways via search requests')
 
 
-class KnxConnection:
+class KnxDescription(asyncio.DatagramProtocol):
+    # TODO: will be moved into libknx
 
-    def _log(self, msg):
-        print('Peername: {}, Message: {}'.format(self.peername, msg))
-
-
-    device_alive = False
-    tunnel_established = False
-
-    communication_channel = None
-
-
-    def __init__(self, loop=None, port=55775):
+    def __init__(self, loop=None):
         self.loop = loop or asyncio.get_event_loop()
         self.transport = None
-
+        self.response = None
 
     def connection_made(self, transport):
         self.transport = transport
         self.peername = self.transport.get_extra_info('peername')
         self.sockname = self.transport.get_extra_info('sockname')
 
-        self._log('Connection established')
-
-        # TODO: start to check if system is alive
-        #       use technique from NSE scripts.
-
-        # initialize connection request
-        packet = libknx.messages.KnxConnectionRequest(port=self.sockname[1])
-        packet.set_source_ip(self.sockname[0])
+        # initialize desciption request
+        packet = libknx.messages.KnxDescriptionRequest(sockname=self.sockname)
         packet.pack_knx_message()
 
-        print(packet.get_message())
         self.transport.sendto(packet.get_message())
-        self._log('KnxConnectionRequest sent')
-
+        LOGGER.debug('KnxDescriptionRequest sent')
 
     def datagram_received(self, data, addr):
-        self._log('Data received')
-        self._log('data: {}'.format(data))
-
-        # TODO: decide if device is alive
-
-
         try:
-            # parse the KNX header to see what type of KNX message it is
-            header = {}
-            header['header_length'], \
-            header['protocol_version'], \
-            header['service_type'], \
-            header['total_length'] = struct.unpack('>BBHH', data[:6])
-            message_type = int(header['service_type'])
+            LOGGER.debug('Parsing KnxDescriptionResponse')
+            self.response = libknx.messages.KnxDescriptionResponse(data)
+
+            if self.response:
+                LOGGER.debug("Got valid description request back!")
+            else:
+                LOGGER.info('Not a valid description response!')
         except Exception as e:
-            print(e)
-            sys.exit(1)
+            LOGGER.exception(e)
+
+        self.transport.close()
 
 
-        if message_type == 0x0202: # it's a search response
-            # TODO: implement KnxSearchResponse
-            pass
-        elif message_type == 0x0206: # it's a connect response
-            self._log('Parsing KnxConnectResponse')
-            response = libknx.messages.KnxConnectionResponse(data)
-            #print(response.header)
-            #print(response.body)
+class KnxSearch(asyncio.DatagramProtocol):
+    # TODO: will be moved into libknx
 
-            self.communication_channel = response.body['communication_channel_id']
+    def __init__(self, loop=None):
+        self.loop = loop or asyncio.get_event_loop()
+        self.transport = None
+        self.responses = set()
 
-            if not response.ERROR: # if no error happened
-                self.device_alive = True
-                if not self.tunnel_established: # we don't have a tunnel set up yet
-                    # check if we received a tunnel response
+    def connection_made(self, transport):
+        self.transport = transport
+        self.peername = self.transport.get_extra_info('peername')
+        self.sockname = self.transport.get_extra_info('sockname')
 
-                    # if its actually a tunnel response, we have a tunnel
-                    self.tunnel_established = True
-            else: # device is not alive and we didn't receive a KnxConnectionResponse, we should abort
-                self.transport.close()
-                sys.exit(1)
-
-        elif message_type == 0x0421: # it's a tunneling ack
-            self._log('Parsing KnxTunnelingAck')
-            response = libknx.messages.KnxTunnellingAck(data)
-            #print(response.header)
-            #print(response.body)
-        else:
-            print('Unknown message type: '.format(message_type))
-            return
-
-        # device is alive and tunnel is established, do the actual stuff
-        self.knx_turn_on_test()
-
-
-    def error_received(self, exc):
-        self._log('An error occured: {}'.format(exc))
-
-
-    def connection_lost(self, exc):
-        self._log('Connection lost: {}'.format(exc))
-
-
-    def knx_turn_on_test(self):
-        # try to turn on the light on device 0/0/1
-        packet = libknx.messages.KnxTunnellingRequest(port=self.sockname[1], communication_channel=self.communication_channel)
-        packet.set_source_ip(self.sockname[0])
+        # initialize desciption request
+        packet = libknx.messages.KnxSearchRequest(sockname=self.sockname)
         packet.pack_knx_message()
 
-        print(packet.get_message())
-        self.transport.sendto(packet.get_message())
-        self._log('KnxTunnellingRequest sent')
+        LOGGER.debug('Sending KnxSearchRequest')
+        #self.transport.sendto(packet.get_message(), addr=None)
+        # TODO: is this a asyncio bug? need to send it on the socket object
+        self.transport.get_extra_info('socket').send(packet.get_message())
+        LOGGER.debug('KnxSearchRequest sent')
 
+    def datagram_received(self, data, addr):
+        try:
+            LOGGER.debug('Parsing KnxSearchResponse')
+            response = libknx.messages.KnxSearchResponse(data)
+
+            if response:
+                LOGGER.debug("Got valid searcg request back!")
+                self.responses.add(response)
+            else:
+                LOGGER.info('Not a valid search response!')
+        except Exception as e:
+            LOGGER.exception(e)
 
 
 class KnxScanner():
+    """The main scanner instance that takes care of scheduling scans for the targets."""
 
-    def __init__(self, targets=[], max_tasks=10, loop=None):
+    def __init__(self, targets=set(), max_tasks=10, loop=None):
         self.loop = loop or asyncio.get_event_loop()
         self.max_tasks = max_tasks
         # the Queue contains all targets
         self.q = Queue(loop=self.loop)
+        self.gateway_queue = Queue(loop=self.loop)
+        self.bus_queue = Queue(loop=self.loop)
+
+        self.targets = targets
         self.alive_targets = set()
+        self.knx_gateways = set()
+
+        for target in targets:
+            self.add_target(target)
 
         # save some timing information
         self.t0 = time.time()
         self.t1 = None
 
 
+    def add_target(self, target):
+        self.q.put_nowait(target)
+
+
     @asyncio.coroutine
-    def knx_connection(self, target):
-        """Do the KnxConnection stuff here."""
+    def knx_bus_worker(self):
+        """A worker for communicating with devices on the bus."""
         pass
 
 
     @asyncio.coroutine
-    def knx_find_bus_devices(self, target):
-        """Find devices on the bus accessible via target (which should be a KNX gateway)."""
-        self.loop.create_datagram_endpoint(
-            KnxConnection,
-            remote_addr=(target, KNX_UDP_PORT)
-        )
+    def knx_search_worker(self):
+        """Send a KnxDescription request to see if target is a KNX device."""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setblocking(0)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        sock.connect(('224.0.23.12', 3671))
+
+        try:
+            transport, protocol = yield from self.loop.create_datagram_endpoint(
+                KnxSearch,
+                local_addr=None,
+                remote_addr=None,
+                sock=sock)
+
+            yield from asyncio.sleep(5)
+
+            if protocol.responses:
+                # we found some KNX gateways
+                for r in protocol.responses:
+                    LOGGER.info('KNX gateway: {}'.format(r))
+                    self.alive_targets.add(r)
+                    self.knx_gateways.add(r)
+        except asyncio.CancelledError:
+            pass
+
+
+    # @asyncio.coroutine
+    # def knx_find_bus_devices(self, target):
+    #     """Find devices on the bus accessible via target (which should be a KNX gateway)."""
+    #     transport, protocol = yield from self.loop.create_datagram_endpoint(
+    #         lambda: KnxConnection(),
+    #         remote_addr=(target, KNX_UDP_PORT)
+    #     )
+    #
+    #     yield from protocol.data_received()
+    #
+    #     while not transport.is_closing:
+    #         print('waiting...')
+    #         asyncio.sleep(2)
+    #
+    #     print(dir(transport))
 
 
     @asyncio.coroutine
-    def work(self):
-        """Process the Queue items."""
+    def knx_description_worker(self):
+        """Send a KnxDescription request to see if target is a KNX device."""
         try:
             while True:
                 target = yield from self.q.get()
-                assert target in self.alive_targets
-                yield from self.knx_connection(target)
+                transport, protocol = yield from self.loop.create_datagram_endpoint(
+                    KnxDescription,
+                    remote_addr=(target[0], target[1]))
+
+                yield from asyncio.sleep(2)
+
+                if protocol.response:
+                    # we have a valid KNX gateway
+                    LOGGER.info('KNX gateway: {}'.format(target))
+                    self.alive_targets.add(target)
+                    self.knx_gateways.add(target)
+
                 self.q.task_done()
         except asyncio.CancelledError:
             pass
 
 
     @asyncio.coroutine
-    def scan(self):
-        """The function that will be called by run_until_complete()."""
-        workers = [asyncio.Task(self.work(), loop=self.loop)
-                   for _ in range(self.max_tasks)]
-        self.t0 = time.time()
-        yield from self.q.join()
-        self.t1 = time.time()
-        for w in workers:
-            w.cancel()
+    def scan(self, search=False):
+        """The function that will be called by run_until_complete(). This is the main coroutine."""
+        if search:
+            yield from self.search_gateways()
+        else:
+            workers = [asyncio.Task(self.knx_description_worker(), loop=self.loop)
+                       for _ in range(self.max_tasks if len(self.targets) > self.max_tasks else len(self.targets))]
+            self.t0 = time.time()
+            yield from self.q.join()
+            self.t1 = time.time()
+            for w in workers:
+                w.cancel()
+
+
+            print('\n\nFound {} device(s): {}'.format(len(self.alive_targets), self.alive_targets))
+            print('Scan took {} seconds'.format(self.t1-self.t0))
 
 
     @asyncio.coroutine
-    def knx_description(self, target):
-        """Send a KnxDescription request to see if target is a KNX device."""
-        pass
+    def search_gateways(self):
+        self.t0 = time.time()
+        yield from asyncio.ensure_future(asyncio.Task(self.knx_search_worker(), loop=self.loop))
+        self.t1 = time.time()
+
+
+        print('\n\nFound {} device(s): {}'.format(len(self.alive_targets), self.alive_targets))
+        print('Scan took {} seconds'.format(self.t1-self.t0))
+
+
+class Targets():
+    """A helper class that expands provided targets to proper lists."""
+    def __init__(self, targets=set(), ports=None):
+        self.targets = set()
+        self.ports = set()
+
+        if ports:
+            self.ports.add(ports)
+
+        if MOD_IPADDRESS:
+            self._parse_ipaddress(targets)
+        else:
+            LOGGER.error('ipaddress module is not available! CIDR notifications will be ignored.')
+            self._parse(targets)
+
+    def _parse_ipaddress(self, targets):
+        """Parse all targets with ipaddress module (with CIDR notation support)."""
+        for target in targets:
+            try:
+                _targets = ipaddress.ip_network(target, strict=False)
+            except ValueError:
+                LOGGER.error('Invalid target definition, ignoring it: {}'.format(target))
+                continue
+
+            for _target in _targets:
+                for port in self.ports:
+                    self.targets.add((str(_target), port))
+
+    def _parse(self, targets):
+        """Parse targets without ipaddress module. This provides a simple interface
+        that does not add the ipaddress module as dependency."""
+        for target in targets:
+            try:
+                socket.inet_aton(target)
+            except socket.error:
+                LOGGER.error('Invalid target definition, ignoring it: {}'.format(target))
+                continue
+
+            for port in self.ports:
+                self.targets.add((target, port))
 
 
 def main():
-    # TODO: parse command line arguments
-    # args = ARGS.parse_args()
+    args = ARGS.parse_args()
+    if not args.targets and not args.search:
+        ARGS.print_help()
+        return 1
 
-    # TODO: do logging stuff
+    targets = Targets(args.targets, args.port)
+    levels = [logging.ERROR, logging.WARN, logging.INFO, logging.DEBUG]
+    if args.level > 2:
+        format = '[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s'
+    else:
+        format = '%(message)s'
+    logging.basicConfig(level=levels[min(args.level, len(levels)-1)], format=format)
+
     loop = asyncio.get_event_loop()
 
-    # TODO: create a KnxScanner instance
-    scanner = KnxScanner(targets=[])
+    if args.search:
+        scanner = KnxScanner(targets=targets.targets)
+    else:
+        scanner = KnxScanner(targets=targets.targets)
+        LOGGER.info('Scanning {} target(s)'.format(len(targets.targets)))
 
     try:
-        # testing, will be removed eventually
-        loop.run_until_complete(
-            loop.create_datagram_endpoint(
-                KnxConnection,
-                remote_addr=('192.168.178.11', 3671)
-            )
-        )
-        # the proposed implementation
-        loop.run_until_complete(scanner.scan())
+        loop.run_until_complete(scanner.scan(search=True))
+    except KeyboardInterrupt:
+        for t in asyncio.Task.all_tasks():
+            t.cancel()
+        loop.run_forever()
     finally:
         loop.close()
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    sys.exit(main())
