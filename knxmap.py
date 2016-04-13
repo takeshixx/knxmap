@@ -1,9 +1,12 @@
 #! /usr/bin/env python3
 import time
 import sys
+import os
 import argparse
 import logging
 import socket
+import struct
+import collections
 
 import libknx
 
@@ -50,8 +53,14 @@ ARGS.add_argument(
     '-q', '--quiet', action='store_const', const=0, dest='level',
     default=2, help='Only log errors')
 ARGS.add_argument(
-    '-p', '--port', action='store_const', const=3671, dest='port',
+    '-p', '--port', action='store', dest='port',
     default=3671, help='UDP port to be scanned')
+ARGS.add_argument(
+    '--workers', action='store', type=int, metavar='N',
+    default=100, help='Limit concurrent workers')
+ARGS.add_argument(
+    '-i', '--interface', action='store', dest='iface',
+    default=None, help='Interface to be used')
 ARGS.add_argument(
     '-sG', '--search', action='store_true', dest='search',
     default=False, help='Find local KNX gateways via search requests')
@@ -60,7 +69,8 @@ ARGS.add_argument(
 class KnxDescription(asyncio.DatagramProtocol):
     # TODO: will be moved into libknx
 
-    def __init__(self, loop=None):
+    def __init__(self, future, loop=None):
+        self.future = future
         self.loop = loop or asyncio.get_event_loop()
         self.transport = None
         self.response = None
@@ -70,7 +80,7 @@ class KnxDescription(asyncio.DatagramProtocol):
         self.peername = self.transport.get_extra_info('peername')
         self.sockname = self.transport.get_extra_info('sockname')
 
-        # initialize desciption request
+        # initialize description request
         packet = libknx.messages.KnxDescriptionRequest(sockname=self.sockname)
         packet.pack_knx_message()
 
@@ -80,12 +90,14 @@ class KnxDescription(asyncio.DatagramProtocol):
     def datagram_received(self, data, addr):
         try:
             LOGGER.debug('Parsing KnxDescriptionResponse')
-            self.response = libknx.messages.KnxDescriptionResponse(data)
+            self.response = libknx.KnxDescriptionResponse(data)
 
             if self.response:
                 LOGGER.debug("Got valid description request back!")
+                self.future.set_result(self.response)
             else:
                 LOGGER.info('Not a valid description response!')
+                self.future.set_result(False)
         except Exception as e:
             LOGGER.exception(e)
 
@@ -95,7 +107,8 @@ class KnxDescription(asyncio.DatagramProtocol):
 class KnxSearch(asyncio.DatagramProtocol):
     # TODO: will be moved into libknx
 
-    def __init__(self, loop=None):
+    def __init__(self, future, loop=None):
+        self.future = future
         self.loop = loop or asyncio.get_event_loop()
         self.transport = None
         self.responses = set()
@@ -116,6 +129,7 @@ class KnxSearch(asyncio.DatagramProtocol):
         LOGGER.debug('KnxSearchRequest sent')
 
     def datagram_received(self, data, addr):
+        print('received something: {}'.format(data))
         try:
             LOGGER.debug('Parsing KnxSearchResponse')
             response = libknx.messages.KnxSearchResponse(data)
@@ -129,20 +143,36 @@ class KnxSearch(asyncio.DatagramProtocol):
             LOGGER.exception(e)
 
 
+KnxTargetReport = collections.namedtuple(
+    'KnxTargetReport',
+    ['host',
+    'port',
+    'mac_address',
+    'knx_address',
+    'device_serial',
+    'friendly_name',
+    'device_status',
+    'supported_services',
+    'bus_devices'])
+
+
 class KnxScanner():
     """The main scanner instance that takes care of scheduling scans for the targets."""
 
-    def __init__(self, targets=set(), max_tasks=10, loop=None):
+    def __init__(self, targets=set(), max_tasks=10, loop=None,
+                 iface=None, workers=10):
         self.loop = loop or asyncio.get_event_loop()
-        self.max_tasks = max_tasks
+        self.max_workers = workers
         # the Queue contains all targets
         self.q = Queue(loop=self.loop)
+
         self.gateway_queue = Queue(loop=self.loop)
         self.bus_queue = Queue(loop=self.loop)
 
         self.targets = targets
         self.alive_targets = set()
-        self.knx_gateways = set()
+        #self.knx_gateways = set()
+        self.knx_gateways = list()
 
         for target in targets:
             self.add_target(target)
@@ -150,6 +180,8 @@ class KnxScanner():
         # save some timing information
         self.t0 = time.time()
         self.t1 = None
+
+        self.iface = iface
 
 
     def add_target(self, target):
@@ -165,18 +197,33 @@ class KnxScanner():
     @asyncio.coroutine
     def knx_search_worker(self):
         """Send a KnxDescription request to see if target is a KNX device."""
+        # TODO: figure out how to get the unicast responses back!
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setblocking(0)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        #sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        #sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+
+        #sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
+
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, struct.pack('256s', str.encode(self.iface)))
+
+        #sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP,
+        #                struct.pack('4sL', socket.inet_aton('224.0.23.12'),
+        #                socket.INADDR_ANY))
+
+        #sock.bind(('', sock.getsockname()[1]))
         sock.connect(('224.0.23.12', 3671))
 
+        #print(sock.getsockname())
+
         try:
+            #transport, protocol = yield from self.loop.create_datagram_endpoint(
+            #    KnxSearch, sock=sock)
+
             transport, protocol = yield from self.loop.create_datagram_endpoint(
-                KnxSearch,
-                local_addr=None,
-                remote_addr=None,
-                sock=sock)
+                KnxSearch, local_addr=sock.getsockname(),remote_addr=('224.0.23.12', 3671),
+                reuse_port=True, reuse_address=True, allow_broadcast=True)
 
             yield from asyncio.sleep(5)
 
@@ -190,44 +237,71 @@ class KnxScanner():
             pass
 
 
-    # @asyncio.coroutine
-    # def knx_find_bus_devices(self, target):
-    #     """Find devices on the bus accessible via target (which should be a KNX gateway)."""
-    #     transport, protocol = yield from self.loop.create_datagram_endpoint(
-    #         lambda: KnxConnection(),
-    #         remote_addr=(target, KNX_UDP_PORT)
-    #     )
-    #
-    #     yield from protocol.data_received()
-    #
-    #     while not transport.is_closing:
-    #         print('waiting...')
-    #         asyncio.sleep(2)
-    #
-    #     print(dir(transport))
-
-
     @asyncio.coroutine
     def knx_description_worker(self):
         """Send a KnxDescription request to see if target is a KNX device."""
         try:
             while True:
                 target = yield from self.q.get()
+                future = asyncio.Future()
+                description = KnxDescription(future)
                 transport, protocol = yield from self.loop.create_datagram_endpoint(
-                    KnxDescription,
+                    lambda: description,
                     remote_addr=(target[0], target[1]))
 
-                yield from asyncio.sleep(2)
+                response = yield  from future
 
-                if protocol.response:
-                    # we have a valid KNX gateway
-                    LOGGER.info('KNX gateway: {}'.format(target))
+                if response:
                     self.alive_targets.add(target)
-                    self.knx_gateways.add(target)
+
+                    t = KnxTargetReport(
+                        host=target[0],
+                        port=target[1],
+                        mac_address=response.body.get('dib_dev_info').get('knx_mac_address'),
+                        knx_address=response.body.get('dib_dev_info').get('knx_address'),
+                        device_serial=response.body.get('dib_dev_info').get('knx_device_serial'),
+                        friendly_name=response.body.get('dib_dev_info').get('device_friendly_name'),
+                        device_status=response.body.get('dib_dev_info').get('device_status'),
+                        supported_services=response.body.get('dib_supp_sv_families').get('families'),
+                        bus_devices=[])
+
+                    self.knx_gateways.append(t)
 
                 self.q.task_done()
         except asyncio.CancelledError:
             pass
+
+
+    def print_knx_target(self, knx_target):
+        """Print a target in a well formatted way."""
+        # TODO: make this better, and prettier.
+        out = {}
+        out[knx_target.host] = collections.OrderedDict()
+        o = out[knx_target.host]
+
+        o['Port'] = knx_target.port
+        o['MAC Address'] = knx_target.mac_address
+        o['KNX Bus Address'] = knx_target.knx_address
+        o['KNX Device Serial'] = knx_target.device_serial
+        o['Device Friendly Name'] = knx_target.friendly_name.strip()
+        o['Device Status'] = knx_target.device_status
+        #o['Supported Services'] = knx_target.supported_services
+        o['Bus Devices'] = knx_target.bus_devices
+
+        print()
+
+        def pretty(d, indent=0):
+            for key, value in d.items():
+                if indent is 0:
+                    print('   ' * indent + str(key))
+                else:
+                    print('   ' * indent + str(key) + ': ', end="", flush=True)
+                if isinstance(value, dict):
+                    pretty(value, indent + 1)
+                else:
+                    print(value)
+
+        pretty(out)
 
 
     @asyncio.coroutine
@@ -237,16 +311,17 @@ class KnxScanner():
             yield from self.search_gateways()
         else:
             workers = [asyncio.Task(self.knx_description_worker(), loop=self.loop)
-                       for _ in range(self.max_tasks if len(self.targets) > self.max_tasks else len(self.targets))]
+                       for _ in range(self.max_workers if len(self.targets) > self.max_workers else len(self.targets))]
             self.t0 = time.time()
             yield from self.q.join()
             self.t1 = time.time()
             for w in workers:
                 w.cancel()
 
+            for t in self.knx_gateways:
+                self.print_knx_target(t)
 
-            print('\n\nFound {} device(s): {}'.format(len(self.alive_targets), self.alive_targets))
-            print('Scan took {} seconds'.format(self.t1-self.t0))
+            print('\nScan took {} seconds'.format(self.t1 - self.t0))
 
 
     @asyncio.coroutine
@@ -255,9 +330,7 @@ class KnxScanner():
         yield from asyncio.ensure_future(asyncio.Task(self.knx_search_worker(), loop=self.loop))
         self.t1 = time.time()
 
-
-        print('\n\nFound {} device(s): {}'.format(len(self.alive_targets), self.alive_targets))
-        print('Scan took {} seconds'.format(self.t1-self.t0))
+        print('\nScan took {} seconds'.format(self.t1-self.t0))
 
 
 class Targets():
@@ -319,13 +392,21 @@ def main():
     loop = asyncio.get_event_loop()
 
     if args.search:
-        scanner = KnxScanner(targets=targets.targets)
+        if args.iface:
+            if os.geteuid() != 0:
+                LOGGER.error('-i/--interface option requires superuser privileges')
+                sys.exit(1)
+
+            scanner = KnxScanner(targets=targets.targets, workers=args.workers, iface=args.iface)
+        else:
+            LOGGER.error('--search option requires -i/--interface')
+            sys.exit(1)
     else:
-        scanner = KnxScanner(targets=targets.targets)
+        scanner = KnxScanner(targets=targets.targets, workers=args.workers)
         LOGGER.info('Scanning {} target(s)'.format(len(targets.targets)))
 
     try:
-        loop.run_until_complete(scanner.scan(search=True))
+        loop.run_until_complete(scanner.scan(search=args.search))
     except KeyboardInterrupt:
         for t in asyncio.Task.all_tasks():
             t.cancel()
