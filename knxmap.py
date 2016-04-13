@@ -8,8 +8,9 @@ import socket
 import libknx
 
 # asyncio requires at least Python 3.3
-if sys.version_info.major < 3 and \
-    sys.version_info.minor < 3:
+if sys.version_info.major < 3 or \
+    (sys.version_info.major > 2 and \
+    sys.version_info.minor < 3):
     print('At least Python version 3.3 is required to run this script!')
     sys.exit(1)
 
