@@ -41,7 +41,7 @@ knx_message_types = {
     0x0742: 'REMOTE_BASIC_CONFIGURATION_REQUEST',
     0x0743: 'REMOTE_RESET_REQUEST'}
 
-knx_service_families = {
+knx_services = {
     0x02: 'KNXnet/IP Core',
     0x03: 'KNXnet/IP Device Management',
     0x04: 'KNXnet/IP Tunnelling',
@@ -91,19 +91,19 @@ class KnxMessage(object):
         self.knx_source = libknx.utils.knx_address_aton(address)
 
     def set_knx_destination(self, address):
-        self.knx_destination = libknx.utils.knx_address_aton(address)
+        self.knx_destination = self.pack_knx_address(address)
 
     def get_message(self):
         return self.message if self.message else False
 
     @staticmethod
-    def get_host_ip_address():
-        # TODO: remove this
-        return socket.gethostbyname(socket.gethostname())
-
-    @staticmethod
     def parse_knx_address(address):
         return '{}.{}.{}'.format((address >> 12) & 0xf, (address >> 8) & 0xf, address & 0xff)
+
+    @staticmethod
+    def pack_knx_address(address):
+        parts = address.split('.')
+        return (int(parts[0]) << 12) + (int(parts[1]) << 8) + (int(parts[2]))
 
     @staticmethod
     def parse_mac_address(address):
@@ -112,6 +112,10 @@ class KnxMessage(object):
     @staticmethod
     def parse_knx_device_serial(address):
         return '{0:02X}{1:02X}{2:02X}{3:02X}{4:02X}{5:02X}'.format(*address)
+
+    def pack_knx_message(self):
+        self.message = self._pack_knx_header()
+        self.message += self._pack_knx_body()
 
     def _pack_knx_header(self):
         try:
@@ -136,6 +140,9 @@ class KnxMessage(object):
             print(e)
             return False
 
+    def _pack_knx_body(self):
+        """Subclasses must define this method."""
+        raise NotImplementedError
 
     def _unpack_stream(self, fmt, stream):
         try:
@@ -178,10 +185,6 @@ class KnxSearchRequest(KnxMessage):
             self.header['service_type'] = 0x0201
             self.header['total_length'] = 14
             #self.set_source_ip(self.get_host_ip_address())
-
-    def pack_knx_message(self):
-        self.message = self._pack_knx_header()
-        self.message += self._pack_knx_body()
 
     def _pack_knx_body(self):
         self.body = struct.pack('!B', 8) # structure_length
@@ -268,10 +271,6 @@ class KnxDescriptionRequest(KnxMessage):
             self.header['total_length'] = 14
             #self.set_source_ip(self.get_host_ip_address())
 
-    def pack_knx_message(self):
-        self.message = self._pack_knx_header()
-        self.message += self._pack_knx_body()
-
     def _pack_knx_body(self):
         self.body = struct.pack('!B', 8) # structure_length
         self.body += struct.pack('!B', 0x01) # protocol code
@@ -298,10 +297,6 @@ class KnxDescriptionResponse(KnxMessage):
             self._unpack_knx_body(message)
         else:
             self.header['service_type'] = 0x0204
-
-    def pack_knx_message(self):
-        self.message = self._pack_knx_header()
-        self.message += self._pack_knx_body()
 
     def _pack_knx_body(self):
         pass
@@ -352,17 +347,13 @@ class KnxConnectionRequest(KnxMessage):
             self.header['total_length'] = 26
             #self.set_source_ip(self.get_host_ip_address())
 
-    def pack_knx_message(self):
-        self.message = self._pack_knx_header()
-        self.message += self._pack_knx_body()
-
     def _pack_knx_body(self):
         # discovery endpoint
         self.body = struct.pack('!B', 8) # structure_length
         self.body += struct.pack('!B', 0x01) # protocol code
         self.body += socket.inet_aton(self.source)
         self.body += struct.pack('!H', self.port)
-        # data endpoint
+        # HPAI
         self.body += struct.pack('!B', 8) # structure_length
         self.body += struct.pack('!B', 0x01) # protocol code
         self.body += socket.inet_aton(self.source)
@@ -446,16 +437,24 @@ class KnxConnectionResponse(KnxMessage):
 
 class KnxTunnellingRequest(KnxMessage):
 
-    def __init__(self, message=None, port=None, communication_channel=None,
-                 knx_source=None, knx_destination=None):
-        self.port = port
+    def __init__(self, message=None, sockname=None, communication_channel=None,
+                 knx_source=None, knx_destination=None, sequence_count=0):
+        try:
+            self.source, self.port = sockname
+        except TypeError:
+            self.source = None
+            self.port = None
+
         self.communication_channel = communication_channel
+        self.sequence_count = sequence_count
 
         # TODO: just for testing use fixed source/destination address
         #self.knx_source = knx_source
         #self.knx_destination = knx_destination
-        self.knx_source = libknx.utils.knx_address_ntoa('0.0.0')
-        self.knx_destination = libknx.utils.knx_address_ntoa('0.0.1')
+        #self.knx_source = libknx.utils.knx_address_ntoa('0.0.0')
+        #self.knx_destination = libknx.utils.knx_address_ntoa('0.0.1')
+
+        self.knx_source = self.pack_knx_address('0.0.0')
 
         if message:
             message = self._unpack_knx_header(message)
@@ -465,15 +464,11 @@ class KnxTunnellingRequest(KnxMessage):
             self.header['total_length'] = 21
             #self.set_source_ip(self.get_host_ip_address())
 
-    def pack_knx_message(self):
-        self.message = self._pack_knx_header()
-        self.message += self._pack_knx_body()
-
     def _pack_knx_body(self):
         # discovery endpoint
         self.body = struct.pack('!B', 4) # structure_length
         self.body += struct.pack('!B', self.communication_channel) # channel id
-        self.body += struct.pack('!', 0) # sequence counter
+        self.body += struct.pack('!B', self.sequence_count) # sequence counter
         self.body += struct.pack('!B', 0) # reserved
         # cEMI (?)
         self.body += struct.pack('!B', 0x11) # message code
@@ -488,7 +483,8 @@ class KnxTunnellingRequest(KnxMessage):
         return self.body
 
     def _unpack_knx_body(self, message):
-        message = io.StringIO(message)
+        #message = io.StringIO(message)
+        message = io.BytesIO(message)
         try:
             self.body['structure_length'] = self._unpack_stream('!B', message)
             self.body['communication_channel_id'] = self._unpack_stream('!B', message)
@@ -511,7 +507,10 @@ class KnxTunnellingRequest(KnxMessage):
 
 class KnxTunnellingAck(KnxMessage):
 
-    def __init__(self, message=None):
+    def __init__(self, message=None, communication_channel=None, sequence_count=0):
+        self.communication_channel = communication_channel
+        self.sequence_count = sequence_count
+
         if message:
             message = self._unpack_knx_header(message)
             self._unpack_knx_body(message)
@@ -520,11 +519,12 @@ class KnxTunnellingAck(KnxMessage):
             self.header['total_length'] = 10
             #self.set_source_ip(self.get_host_ip_address())
 
-    def pack_knx_message(self):
-        pass
-
     def _pack_knx_body(self):
-        pass
+        self.body = struct.pack('!B', 4) # structure_length
+        self.body += struct.pack('!B', self.communication_channel) # channel id
+        self.body += struct.pack('!B', self.sequence_count) # sequence counter
+        self.body += struct.pack('!B', 0) # status
+        return self.body
 
     def _unpack_knx_body(self, message):
         message = io.BytesIO(message)
@@ -537,3 +537,92 @@ class KnxTunnellingAck(KnxMessage):
             print(e)
             print(message.read())
             return
+
+
+class KnxDisconnectRequest(KnxMessage):
+
+    def __init__(self, message=None, sockname=None, communication_channel=None,
+                 knx_source=None, knx_destination=None):
+        try:
+            self.source, self.port = sockname
+        except TypeError:
+            self.source = None
+            self.port = None
+
+        self.communication_channel = communication_channel
+
+        if message:
+            message = self._unpack_knx_header(message)
+            self._unpack_knx_body(message)
+        else:
+            self.header['service_type'] = 0x0209
+            self.header['total_length'] = 16
+
+    def _pack_knx_body(self):
+        # discovery endpoint
+        self.body = struct.pack('!B', self.communication_channel) # channel id
+        self.body += struct.pack('!B', 0) # reserved
+        # HPAI
+        self.body += struct.pack('!B', 8) # structure_length
+        self.body += struct.pack('!B', 0x01) # protocol code
+        self.body += socket.inet_aton(self.source)
+        self.body += struct.pack('!H', self.port)
+        return self.body
+
+    def _unpack_knx_body(self, message):
+        message = io.StringIO(message)
+        try:
+            self.body['communication_channel_id'] = self._unpack_stream('!B', message)
+            self.body['reserved'] = self._unpack_stream('!B', message)
+
+            self.body['hpai'] = {}
+            self.body['hpai']['structure_length'] = self._unpack_stream('!B', message)
+            self.body['hpai']['protocol_code'] = self._unpack_stream('!B', message)
+            self.body['hpai']['ip_address'] = socket.inet_ntoa(message.read(4))
+            self.body['hpai']['port'] = self._unpack_stream('!H', message)
+        except Exception as e:
+            print(e)
+
+
+class KnxDisconnectResponse(KnxMessage):
+
+    def __init__(self, message=None, communication_channel=None,
+                 knx_source=None, knx_destination=None):
+        self.communication_channel = communication_channel
+
+        if message:
+            message = self._unpack_knx_header(message)
+            self._unpack_knx_body(message)
+        else:
+            self.header['service_type'] = 0x020a
+            self.header['total_length'] = 8
+
+    def _pack_knx_body(self):
+        # discovery endpoint
+        self.body = struct.pack('!B', self.communication_channel)  # channel id
+        self.body += struct.pack('!B', 0)  # status
+        return self.body
+
+    def _unpack_knx_body(self, message):
+        message = io.StringIO(message)
+        try:
+            self.body['communication_channel_id'] = self._unpack_stream('!B', message)
+            self.body['status'] = self._unpack_stream('!B', message)
+        except Exception as e:
+            print(e)
+
+
+# TODO: implement CONNECTIONSTATE_REQUEST aka KNX Heartbeat
+# * has to be sent by the client every 60s
+# * server has to respond within 10s
+# * if client doesn't send one withing 120s, server mus tear down connection
+#   -> should we even care?
+
+# TODO: implement routing requests (multicast?)
+#       ROUTING_INDICATION
+#       ROUTING_LOST_MESSAGE
+
+# TODO: implement device configuration requests
+#       DEVICE_CONFIGURATION_REQUEST
+#       DEVICE_CONFIGURATION_ACK
+

@@ -9,13 +9,16 @@ from .messages import *
 LOGGER = logging.getLogger(__name__)
 
 
-class KnxBusConnection:
+class KnxBusConnection(asyncio.DatagramProtocol):
     """Communicate with bus devices via a KNX gateway using TunnellingRequests."""
 
     tunnel_established = False
     communication_channel = None
+    sequence_count = 0
+    gateway_knx_address = '0.0.0'
 
-    def __init__(self, loop=None, port=55775):
+    def __init__(self, future, loop=None):
+        self.future = future
         self.loop = loop or asyncio.get_event_loop()
         self.transport = None
 
@@ -27,18 +30,13 @@ class KnxBusConnection:
 
         LOGGER.debug('Connection established')
 
-
-        # initialize connection request
-        packet = libknx.messages.KnxConnectionRequest(port=self.sockname[1])
-        packet.set_source_ip(self.sockname[0])
-        packet.pack_knx_message()
-
-        self.transport.sendto(packet.get_message())
+        connect_request = libknx.messages.KnxConnectionRequest(sockname=self.sockname)
+        connect_request.pack_knx_message()
+        self.transport.sendto(connect_request.get_message())
         LOGGER.debug('KnxConnectionRequest sent')
 
 
     def datagram_received(self, data, addr):
-        LOGGER.debug('Data received')
         LOGGER.debug('data: {}'.format(data))
 
         try:
@@ -54,46 +52,62 @@ class KnxBusConnection:
             self.transport.close()
             return
 
+        LOGGER.info('message_type: {}'.format(message_type))
 
-        if message_type == 0x0206: # it's a connect response
+        if message_type == 0x0206: # CONNECT_RESPONSE
             LOGGER.info('Parsing KnxConnectResponse')
-            response = libknx.messages.KnxConnectionResponse(data)
-            #print(response.header)
-            #print(response.body)
+            response = libknx.KnxConnectionResponse(data)
 
-            self.communication_channel = response.body['communication_channel_id']
-
-            if not response.ERROR: # if no error happened
-                self.device_alive = True
+            if not response.ERROR:
                 if not self.tunnel_established: # we don't have a tunnel set up yet
-                    # check if we received a tunnel response
-
-                    # if its actually a tunnel response, we have a tunnel
                     self.tunnel_established = True
-            else: # device is not alive and we didn't receive a KnxConnectionResponse, we should abort
-                self.transport.close()
-                sys.exit(1)
 
-        elif message_type == 0x0421: # it's a tunneling ack
+                self.communication_channel = response.body['communication_channel_id']
+                LOGGER.info('Channel ID: {}'.format(self.communication_channel))
+
+                self.future.set_result(True)
+            else: # device is not alive and we didn't receive a KnxConnectionResponse, we should abort
+                LOGGER.info('CONNECT_RESPONSE ERROR: {}'.format(response.ERROR))
+                self.transport.close()
+                self.future.set_result(None)
+
+        elif message_type == 0x0420: # TUNNELLING_REQUEST
+            # TODO: why does the gateway send back TUNNELLING_REQUESTS?
+            LOGGER.info('Parsing KnxTunnelingRequest')
+            response = libknx.KnxTunnellingRequest(data)
+
+            tunnelling_ack = libknx.KnxTunnellingAck(
+                communication_channel=response.body.get('communication_channel_id'),
+                sequence_count=response.body.get('sequence_counter'))
+            tunnelling_ack.pack_knx_message()
+            self.transport.sendto(tunnelling_ack.get_message())
+
+
+        elif message_type == 0x0421: # TUNNELLING_ACK
             LOGGER.info('Parsing KnxTunnelingAck')
-            response = libknx.messages.KnxTunnellingAck(data)
-            #print(response.header)
-            #print(response.body)
+            response = libknx.KnxTunnellingAck(data)
+
+            # TODO: probably not even needed
+            self.sequence_count += 1
+
+
+        elif message_type == 0x0209: # DISCONNECT_REQUEST
+            LOGGER.info('Parsing KnxDisconnectRequest')
+            response = libknx.KnxDisconnectResponse(data)
+
+        elif message_type == 0x020a: # DISCONNECT_RESPONSE
+            LOGGER.info('Parsing KnxDisconnectResponse')
+            response = libknx.KnxDisconnectResponse(data)
+            self.transport.close()
         else:
             LOGGER.error('Unknown message type: '.format(message_type))
             return
 
-        # device is alive and tunnel is established, do the actual stuff
-        self.knx_tunnelling_test()
 
-
-    def knx_tunnelling_test(self):
-        # try to turn on the light on device 0/0/1
-        packet = libknx.messages.KnxTunnellingRequest(
-            port=self.sockname[1], communication_channel=self.communication_channel)
-        packet.set_source_ip(self.sockname[0])
-        packet.pack_knx_message()
-
-        print(packet.get_message())
-        self.transport.sendto(packet.get_message())
-        self._log('KnxTunnellingRequest sent')
+    def tunnel_disconnect(self):
+        """Close the tunnel connection with a DISCONNECT_REQUEST."""
+        disconnect_request = libknx.KnxDisconnectRequest(
+            sockname=self.sockname,
+            communication_channel=self.communication_channel)
+        disconnect_request.pack_knx_message()
+        self.transport.sendto(disconnect_request.get_message())
