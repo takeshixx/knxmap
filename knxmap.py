@@ -7,12 +7,13 @@ import logging
 import socket
 import struct
 import collections
+import binascii
 
 import libknx
 
 # asyncio requires at least Python 3.3
 if sys.version_info.major < 3 or \
-    (sys.version_info.major > 2 and \
+    (sys.version_info.major > 2 and
     sys.version_info.minor < 3):
     print('At least Python version 3.3 is required to run this script!')
     sys.exit(1)
@@ -169,10 +170,26 @@ class KnxScanner():
         self.gateway_queue = Queue(loop=self.loop)
         self.bus_queue = Queue(loop=self.loop)
 
+        # TODO: put this in a separate function
+        for i in [0, 1, 2]:
+            for ii in [0, 1, 2]:
+                for iii in range(1, 16):
+                    #self.bus_queue.put_nowait('{}.{}.{}'.format(i, ii, iii))
+                    pass
+
+        self.bus_queue.put_nowait('0.0.1')
+        self.bus_queue.put_nowait('0.0.2')
+        self.bus_queue.put_nowait('0.0.3')
+        self.bus_queue.put_nowait('0.0.4')
+        self.bus_queue.put_nowait('0.0.5')
+        self.bus_queue.put_nowait('0.0.6')
+
         self.targets = targets
         self.alive_targets = set()
         #self.knx_gateways = set()
         self.knx_gateways = list()
+
+        self.bus_devices = list()
 
         for target in targets:
             self.add_target(target)
@@ -187,11 +204,34 @@ class KnxScanner():
     def add_target(self, target):
         self.q.put_nowait(target)
 
-
     @asyncio.coroutine
-    def knx_bus_worker(self):
+    def knx_bus_worker(self, transport, protocol, future):
         """A worker for communicating with devices on the bus."""
-        pass
+        # TODO: before we scan the bus, make sure the gateway supports tunneling/routing services
+        try:
+            while True:
+                target = yield from self.bus_queue.get()
+
+                LOGGER.info('BUS: target: {}'.format(target))
+
+                yield from asyncio.sleep(.5)
+
+                if not protocol.tunnel_established:
+                    LOGGER.error('Tunnel is not open!')
+                    return
+
+                tunnel_request = libknx.KnxTunnellingRequest(
+                    sockname=transport.get_extra_info('sockname'),
+                    communication_channel=protocol.communication_channel,
+                    sequence_count=protocol.sequence_count)
+                tunnel_request.set_knx_destination(target)
+                tunnel_request.pack_knx_message()
+                transport.sendto(tunnel_request.get_message())
+                self.bus_queue.task_done()
+
+                LOGGER.info('Sent tunneling_request')
+        except asyncio.CancelledError:
+            pass
 
 
     @asyncio.coroutine
@@ -232,7 +272,7 @@ class KnxScanner():
                 for r in protocol.responses:
                     LOGGER.info('KNX gateway: {}'.format(r))
                     self.alive_targets.add(r)
-                    self.knx_gateways.add(r)
+                    self.knx_gateways.append(r)
         except asyncio.CancelledError:
             pass
 
@@ -262,7 +302,9 @@ class KnxScanner():
                         device_serial=response.body.get('dib_dev_info').get('knx_device_serial'),
                         friendly_name=response.body.get('dib_dev_info').get('device_friendly_name'),
                         device_status=response.body.get('dib_dev_info').get('device_status'),
-                        supported_services=response.body.get('dib_supp_sv_families').get('families'),
+                        supported_services=[
+                            libknx.knx_services[k] for k,v in
+                            response.body.get('dib_supp_sv_families').get('families').items()],
                         bus_devices=[])
 
                     self.knx_gateways.append(t)
@@ -283,9 +325,9 @@ class KnxScanner():
         o['MAC Address'] = knx_target.mac_address
         o['KNX Bus Address'] = knx_target.knx_address
         o['KNX Device Serial'] = knx_target.device_serial
-        o['Device Friendly Name'] = knx_target.friendly_name.strip()
+        o['Device Friendly Name'] = binascii.b2a_qp(knx_target.friendly_name.strip())
         o['Device Status'] = knx_target.device_status
-        #o['Supported Services'] = knx_target.supported_services
+        o['Supported Services'] = knx_target.supported_services
         o['Bus Devices'] = knx_target.bus_devices
 
         print()
@@ -296,10 +338,17 @@ class KnxScanner():
                     print('   ' * indent + str(key))
                 else:
                     print('   ' * indent + str(key) + ': ', end="", flush=True)
-                if isinstance(value, dict):
+                if isinstance(value, list):
+                    for i,v in enumerate(value):
+                        if i is 0:
+                            print()
+                        print('   ' * (indent+1) + str(v))
+                elif isinstance(value, dict):
                     pretty(value, indent + 1)
                 else:
                     print(value)
+
+            print()
 
         pretty(out)
 
@@ -309,6 +358,36 @@ class KnxScanner():
         """The function that will be called by run_until_complete(). This is the main coroutine."""
         if search:
             yield from self.search_gateways()
+        elif True:
+            # target = yield from self.gateway_queue.get()
+            future = asyncio.Future()
+            bus_con = libknx.KnxBusConnection(future)
+            transport, protocol = yield from self.loop.create_datagram_endpoint(
+                lambda: bus_con,
+                # remote_addr=(target[0], target[1]))
+                remote_addr=('192.168.178.11', 3671))
+
+            # make sure the tunnel has been established
+            connected = yield from future
+
+            if connected:
+
+                workers = [asyncio.Task(self.knx_bus_worker(transport, protocol, future), loop=self.loop)
+                           for _ in range(self.max_workers if len(self.targets) > self.max_workers else 1)]
+
+                self.t0 = time.time()
+                LOGGER.info('Wait for bus workers')
+                yield from self.bus_queue.join()
+                self.t1 = time.time()
+                for w in workers:
+                    w.cancel()
+
+                yield from asyncio.sleep(2)
+                protocol.tunnel_disconnect()
+
+            LOGGER.info('Done with bus scan!')
+
+
         else:
             workers = [asyncio.Task(self.knx_description_worker(), loop=self.loop)
                        for _ in range(self.max_workers if len(self.targets) > self.max_workers else len(self.targets))]
