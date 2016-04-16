@@ -54,7 +54,7 @@ ARGS.add_argument(
     '-q', '--quiet', action='store_const', const=0, dest='level',
     default=2, help='Only log errors')
 ARGS.add_argument(
-    '-p', '--port', action='store', dest='port',
+    '-p', '--port', action='store', dest='port', type=int,
     default=3671, help='UDP port to be scanned')
 ARGS.add_argument(
     '--workers', action='store', type=int, metavar='N',
@@ -65,6 +65,12 @@ ARGS.add_argument(
 ARGS.add_argument(
     '-sG', '--search', action='store_true', dest='search',
     default=False, help='Find local KNX gateways via search requests')
+ARGS.add_argument(
+    '--search-timeout', action='store', dest='search_timeout', type=int,
+    default=5, help='Timeout in seconds for multicast responses')
+ARGS.add_argument(
+    '--bus', action='store_true', dest='search',
+    default=False, help='Scan bus on KNXnet/IP gateway')
 
 
 class KnxDescription(asyncio.DatagramProtocol):
@@ -108,8 +114,7 @@ class KnxDescription(asyncio.DatagramProtocol):
 class KnxSearch(asyncio.DatagramProtocol):
     # TODO: will be moved into libknx
 
-    def __init__(self, future, loop=None):
-        self.future = future
+    def __init__(self, loop=None):
         self.loop = loop or asyncio.get_event_loop()
         self.transport = None
         self.responses = set()
@@ -118,26 +123,19 @@ class KnxSearch(asyncio.DatagramProtocol):
         self.transport = transport
         self.peername = self.transport.get_extra_info('peername')
         self.sockname = self.transport.get_extra_info('sockname')
-
-        # initialize desciption request
         packet = libknx.messages.KnxSearchRequest(sockname=self.sockname)
         packet.pack_knx_message()
 
-        LOGGER.debug('Sending KnxSearchRequest')
-        #self.transport.sendto(packet.get_message(), addr=None)
         # TODO: is this a asyncio bug? need to send it on the socket object
-        self.transport.get_extra_info('socket').send(packet.get_message())
-        LOGGER.debug('KnxSearchRequest sent')
+        self.transport.get_extra_info('socket').sendto(packet.get_message(), ('224.0.23.12', 3671))
 
     def datagram_received(self, data, addr):
-        print('received something: {}'.format(data))
         try:
             LOGGER.debug('Parsing KnxSearchResponse')
             response = libknx.messages.KnxSearchResponse(data)
 
             if response:
-                LOGGER.debug("Got valid searcg request back!")
-                self.responses.add(response)
+                self.responses.add((addr, response))
             else:
                 LOGGER.info('Not a valid search response!')
         except Exception as e:
@@ -237,42 +235,50 @@ class KnxScanner():
     @asyncio.coroutine
     def knx_search_worker(self):
         """Send a KnxDescription request to see if target is a KNX device."""
-        # TODO: figure out how to get the unicast responses back!
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.setblocking(0)
-        #sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        #sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-
-        #sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
-
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, struct.pack('256s', str.encode(self.iface)))
-
-        #sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP,
-        #                struct.pack('4sL', socket.inet_aton('224.0.23.12'),
-        #                socket.INADDR_ANY))
-
-        #sock.bind(('', sock.getsockname()[1]))
-        sock.connect(('224.0.23.12', 3671))
-
-        #print(sock.getsockname())
-
         try:
-            #transport, protocol = yield from self.loop.create_datagram_endpoint(
-            #    KnxSearch, sock=sock)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.setblocking(0)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, struct.pack('256s', str.encode(self.iface)))
 
-            transport, protocol = yield from self.loop.create_datagram_endpoint(
-                KnxSearch, local_addr=sock.getsockname(),remote_addr=('224.0.23.12', 3671),
-                reuse_port=True, reuse_address=True, allow_broadcast=True)
+            protocol = KnxSearch()
+            waiter = asyncio.Future(loop=self.loop)
+            transport = self.loop._make_datagram_transport(
+                sock, protocol, ('224.0.23.12', 3671), waiter)
 
+            try:
+                # Wait until connection_made() has been called on the transport
+                yield from waiter
+            except:
+                LOGGER.error('Creating multicast transport failed!')
+                transport.close()
+                return
+
+            # Wait SEARCH_TIMEOUT seconds for responses to our multicast packets
             yield from asyncio.sleep(5)
 
             if protocol.responses:
-                # we found some KNX gateways
-                for r in protocol.responses:
-                    LOGGER.info('KNX gateway: {}'.format(r))
-                    self.alive_targets.add(r)
-                    self.knx_gateways.append(r)
+                # If protocol received SEARCH_RESPONSE packets, print them
+                for response in protocol.responses:
+                    peer = response[0]
+                    response = response[1]
+
+                    #print(response.body)
+
+                    t = KnxTargetReport(
+                        host=peer[0],
+                        port=peer[1],
+                        mac_address=response.body.get('dib_dev_info').get('knx_mac_address'),
+                        knx_address=response.body.get('dib_dev_info').get('knx_address'),
+                        device_serial=response.body.get('dib_dev_info').get('knx_device_serial'),
+                        friendly_name=response.body.get('dib_dev_info').get('device_friendly_name'),
+                        device_status=response.body.get('dib_dev_info').get('device_status'),
+                        supported_services=[
+                            libknx.KNX_SERVICES[k] for k, v in
+                            response.body.get('dib_supp_sv_families').get('families').items()],
+                        bus_devices=[])
+
+                    self.knx_gateways.append(t)
         except asyncio.CancelledError:
             pass
 
@@ -303,7 +309,7 @@ class KnxScanner():
                         friendly_name=response.body.get('dib_dev_info').get('device_friendly_name'),
                         device_status=response.body.get('dib_dev_info').get('device_status'),
                         supported_services=[
-                            libknx.knx_services[k] for k,v in
+                            libknx.KNX_SERVICES[k] for k,v in
                             response.body.get('dib_supp_sv_families').get('families').items()],
                         bus_devices=[])
 
@@ -358,6 +364,11 @@ class KnxScanner():
         """The function that will be called by run_until_complete(). This is the main coroutine."""
         if search:
             yield from self.search_gateways()
+
+            for t in self.knx_gateways:
+                self.print_knx_target(t)
+
+            print('\nSearching done')
         elif True:
             # target = yield from self.gateway_queue.get()
             future = asyncio.Future()
