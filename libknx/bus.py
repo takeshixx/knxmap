@@ -3,6 +3,7 @@ available devices."""
 import sys
 import logging
 import asyncio
+import struct
 
 from .messages import *
 
@@ -30,7 +31,7 @@ class KnxBusConnection(asyncio.DatagramProtocol):
 
         LOGGER.debug('Connection established')
 
-        connect_request = libknx.messages.KnxConnectionRequest(sockname=self.sockname)
+        connect_request = KnxConnectRequest(sockname=self.sockname)
         connect_request.pack_knx_message()
         self.transport.sendto(connect_request.get_message())
         LOGGER.debug('KnxConnectionRequest sent')
@@ -56,7 +57,7 @@ class KnxBusConnection(asyncio.DatagramProtocol):
 
         if message_type == 0x0206: # CONNECT_RESPONSE
             LOGGER.info('Parsing KnxConnectResponse')
-            response = libknx.KnxConnectionResponse(data)
+            response = KnxConnectResponse(data)
 
             if not response.ERROR:
                 if not self.tunnel_established: # we don't have a tunnel set up yet
@@ -74,9 +75,9 @@ class KnxBusConnection(asyncio.DatagramProtocol):
         elif message_type == 0x0420: # TUNNELLING_REQUEST
             # TODO: why does the gateway send back TUNNELLING_REQUESTS?
             LOGGER.info('Parsing KnxTunnelingRequest')
-            response = libknx.KnxTunnellingRequest(data)
+            response = KnxTunnellingRequest(data)
 
-            tunnelling_ack = libknx.KnxTunnellingAck(
+            tunnelling_ack = KnxTunnellingAck(
                 communication_channel=response.body.get('communication_channel_id'),
                 sequence_count=response.body.get('sequence_counter'))
             tunnelling_ack.pack_knx_message()
@@ -85,7 +86,7 @@ class KnxBusConnection(asyncio.DatagramProtocol):
 
         elif message_type == 0x0421: # TUNNELLING_ACK
             LOGGER.info('Parsing KnxTunnelingAck')
-            response = libknx.KnxTunnellingAck(data)
+            response = KnxTunnellingAck(data)
 
             # TODO: probably not even needed
             self.sequence_count += 1
@@ -93,11 +94,11 @@ class KnxBusConnection(asyncio.DatagramProtocol):
 
         elif message_type == 0x0209: # DISCONNECT_REQUEST
             LOGGER.info('Parsing KnxDisconnectRequest')
-            response = libknx.KnxDisconnectResponse(data)
+            response = KnxDisconnectResponse(data)
 
         elif message_type == 0x020a: # DISCONNECT_RESPONSE
             LOGGER.info('Parsing KnxDisconnectResponse')
-            response = libknx.KnxDisconnectResponse(data)
+            response = KnxDisconnectResponse(data)
             self.transport.close()
         else:
             LOGGER.error('Unknown message type: '.format(message_type))
@@ -106,7 +107,7 @@ class KnxBusConnection(asyncio.DatagramProtocol):
 
     def tunnel_disconnect(self):
         """Close the tunnel connection with a DISCONNECT_REQUEST."""
-        disconnect_request = libknx.KnxDisconnectRequest(
+        disconnect_request = KnxDisconnectRequest(
             sockname=self.sockname,
             communication_channel=self.communication_channel)
         disconnect_request.pack_knx_message()
