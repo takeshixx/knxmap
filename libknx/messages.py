@@ -1,4 +1,4 @@
-"""KNXnet/IP message implementations"""
+"""KNXnet/IP message implementations required bny knxmap."""
 import struct
 import socket
 import io
@@ -6,8 +6,6 @@ import collections
 import logging
 
 import libknx.utils
-
-LOGGER = logging.getLogger(__name__)
 
 __all__ = ['KNX_CONSTANTS',
            'KNX_SERVICES',
@@ -23,6 +21,8 @@ __all__ = ['KNX_CONSTANTS',
            'KnxTunnellingAck',
            'KnxDisconnectRequest',
            'KnxDisconnectResponse']
+
+LOGGER = logging.getLogger(__name__)
 
 KNX_CONSTANTS = {
     'KNXNETIP_VERSION_10': 0x10,
