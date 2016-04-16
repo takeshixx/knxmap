@@ -1,19 +1,40 @@
-"""KNX message implementations that are necessary for the scanning
-tasks."""
+"""KNXnet/IP message implementations"""
 import struct
 import socket
 import io
+import collections
 
 import libknx.utils
 
-# TODO: reset __all__ when all messages are implemented
-#__all__ = ['KnxSearchRequest', 'KnxConnectionRequest']
+__all__ = ['KNX_CONSTANTS',
+           'KNX_SERVICES',
+           'KNX_MESSAGE_TYPES',
+           'KNX_STATUS_CODES',
+           'KnxSearchRequest',
+           'KnxSearchResponse',
+           'KnxDescriptionRequest',
+           'KnxDescriptionResponse',
+           'KnxConnectRequest',
+           'KnxConnectResponse',
+           'KnxTunnellingRequest',
+           'KnxTunnellingAck',
+           'KnxDisconnectRequest',
+           'KnxDisconnectResponse']
 
-knx_constants = {
+KNX_CONSTANTS = {
     'KNXNETIP_VERSION_10': 0x10,
     'HEADER_SIZE_10': 0x06}
 
-knx_message_types = {
+KNX_SERVICES = {
+    0x02: 'KNXnet/IP Core',
+    0x03: 'KNXnet/IP Device Management',
+    0x04: 'KNXnet/IP Tunnelling',
+    0x05: 'KNXnet/IP Routing',
+    0x06: 'KNXnet/IP Remote Logging',
+    0x08: 'KNXnet/IP Object Server',
+    0x07: 'KNXnet/IP Remote Configuration and Diagnosis'}
+
+KNX_MESSAGE_TYPES = {
     # KNXnet/IP-Core-Services
     0x0201: 'SEARCH_REQUEST',
     0x0202: 'SEARCH_RESPONSE',
@@ -41,16 +62,7 @@ knx_message_types = {
     0x0742: 'REMOTE_BASIC_CONFIGURATION_REQUEST',
     0x0743: 'REMOTE_RESET_REQUEST'}
 
-knx_services = {
-    0x02: 'KNXnet/IP Core',
-    0x03: 'KNXnet/IP Device Management',
-    0x04: 'KNXnet/IP Tunnelling',
-    0x05: 'KNXnet/IP Routing',
-    0x06: 'KNXnet/IP Remote Logging',
-    0x08: 'KNXnet/IP Object Server',
-    0x07: 'KNXnet/IP Remote Configuration and Diagnosis'}
-
-knx_status_codes = {
+KNX_STATUS_CODES = {
     0x00: 'E_NO_ERROR',
     0x01: 'E_HOST_PROTOCOL_TYPE',
     0x02: 'E_VERSION_NOT_SUPPORTED',
@@ -69,8 +81,8 @@ knx_status_codes = {
 
 class KnxMessage(object):
     header = {
-        'header_length': 0x06,
-        'protocol_version': 0x10,
+        'header_length': KNX_CONSTANTS['HEADER_SIZE_10'],
+        'protocol_version': KNX_CONSTANTS['KNXNETIP_VERSION_10'],
         'service_type': None,
         'total_length': None}
     body = {}
@@ -126,7 +138,6 @@ class KnxMessage(object):
                                self.header.get('total_length'))
         except struct.error as e:
             print(e)
-            return False
 
     def _unpack_knx_header(self, message):
         """Set self.header dict and return message body"""
@@ -138,13 +149,13 @@ class KnxMessage(object):
             return message[6:]
         except struct.error as e:
             print(e)
-            return False
 
     def _pack_knx_body(self):
         """Subclasses must define this method."""
         raise NotImplementedError
 
-    def _unpack_stream(self, fmt, stream):
+    @staticmethod
+    def _unpack_stream(fmt, stream):
         try:
             buf = stream.read(struct.calcsize(fmt))
             return struct.unpack(fmt, buf)[0]
@@ -152,10 +163,9 @@ class KnxMessage(object):
             print(e)
             return
 
-
     def _parse_knx_body_hpai(self, message):
         try:
-            self.body['hpai'] = {}
+            self.body['hpai'] = dict()
             self.body['hpai']['structure_length'], \
             self.body['hpai']['protocol_code'], \
             self.body['hpai']['ip_address'], \
@@ -165,6 +175,75 @@ class KnxMessage(object):
         except struct.error as e:
             print(e)
             return False
+
+    def _pack_hpai(self):
+        hpai = struct.pack('!B', 8) # structure_length
+        hpai += struct.pack('!B', 0x01) # protocol code
+        hpai += socket.inet_aton(self.source)
+        hpai += struct.pack('!H', self.port)
+        return hpai
+
+    def _unpack_hpai(self, message):
+        hpai = dict()
+        hpai['structure_length'] = self._unpack_stream('!B', message)
+        hpai['protocol_code'] = self._unpack_stream('!B', message)
+        hpai['ip_address'] = socket.inet_ntoa(message.read(4))
+        hpai['port'] = self._unpack_stream('!H', message)
+        return hpai
+
+    def _unpack_dib_dev_info(self, message):
+        dib_dev_info = dict()
+        dib_dev_info['structure_length'] = self._unpack_stream('!B', message)
+        dib_dev_info['description_type'] = self._unpack_stream('!B', message)
+        dib_dev_info['knx_medium'] = self._unpack_stream('!B', message)
+        dib_dev_info['device_status'] = 'PROGMODE_ON' if self._unpack_stream('!B', message) else 'PROGMODE_OFF'
+        dib_dev_info['knx_address'] = self.parse_knx_address(self._unpack_stream('!H', message))
+        dib_dev_info['project_install_identifier'] = self._unpack_stream('!H', message)
+        dib_dev_info['knx_device_serial'] = self.parse_knx_device_serial(
+            self._unpack_stream('!6s', message))
+        dib_dev_info['knx_dev_multicast_address'] = socket.inet_ntoa(message.read(4))
+        dib_dev_info['knx_mac_address'] = self.parse_mac_address(self._unpack_stream('!6s', message))
+        dib_dev_info['device_friendly_name'] = self._unpack_stream('!30s', message)
+        return dib_dev_info
+
+    def _unpack_dib_supp_sv_families(self, message):
+        dib_supp_sv_families = collections.OrderedDict()
+        dib_supp_sv_families['structure_length'] = self._unpack_stream('!B', message)
+        dib_supp_sv_families['description_type'] = self._unpack_stream('!B', message)
+        dib_supp_sv_families['families'] = {}
+
+        for i in range(int((dib_supp_sv_families['structure_length'] - 2) / 2)):
+            service_id = self._unpack_stream('!B', message)
+            version = self._unpack_stream('!B', message)
+            dib_supp_sv_families['families'][service_id] = dict()
+            dib_supp_sv_families['families'][service_id]['version'] = version
+
+        return dib_supp_sv_families
+
+    def _pack_cemi(self):
+        cemi = struct.pack('!B', 0x11) # message code
+        cemi += struct.pack('!B', 0) # add information length
+        cemi += struct.pack('!B', 0xbc) # controlfield 1
+        cemi += struct.pack('!B', 0xf0) # controlfield 2
+        cemi += struct.pack('!H', self.knx_source) # source address (KNX address)
+        cemi += struct.pack('!H', self.knx_destination) # destination address (KNX address)
+        cemi += struct.pack('!B', 0x01) # NPDU length
+        cemi += struct.pack('!B', 0x00) # TPCI: UDT (?)
+        cemi += struct.pack('!B', 0x81) # APCI (?)
+        return cemi
+
+    def _unpack_cemi(self, message):
+        cemi = dict()
+        cemi['message_code'] = self._unpack_stream('!B', message)
+        cemi['information_length'] = self._unpack_stream('!B', message)
+        cemi['controlfield_1'] = self._unpack_stream('!B', message)
+        cemi['controlfield_2'] = self._unpack_stream('!B', message)
+        cemi['knx_source'] = self._unpack_stream('!H', message)
+        cemi['knx_destination'] = self._unpack_stream('!H', message)
+        cemi['npdu'] = self._unpack_stream('!B', message)
+        cemi['tcpi'] = self._unpack_stream('!B', message)
+        cemi['apci'] = self._unpack_stream('!B', message)
+        return cemi
 
 
 class KnxSearchRequest(KnxMessage):
@@ -177,29 +256,20 @@ class KnxSearchRequest(KnxMessage):
             self.port = None
 
         if message:
-            # parse a message
             message = self._unpack_knx_header(message)
             self._unpack_knx_body(message)
         else:
-            # create new message
             self.header['service_type'] = 0x0201
             self.header['total_length'] = 14
-            #self.set_source_ip(self.get_host_ip_address())
 
     def _pack_knx_body(self):
-        self.body = struct.pack('!B', 8) # structure_length
-        self.body += struct.pack('!B', 0x01) # protocol code
-        self.body += socket.inet_aton(self.source)
-        self.body += struct.pack('!H', self.port)
+        self.body = self._pack_hpai()
         return self.body
 
     def _unpack_knx_body(self, message):
-        message = io.StringIO(message)
         try:
-            self.body['structure_length'] = self._unpack_stream('!B', message)
-            self.body['protocol_code'] = self._unpack_stream('!B', message)
-            self.body['ip_address'] = socket.inet_ntoa(message.read(4))
-            self.body['port'] = self._unpack_stream('!H', message)
+            message = io.BytesIO(message)
+            self.body = self._unpack_hpai(message)
         except Exception as e:
             print(e)
 
@@ -213,43 +283,15 @@ class KnxSearchResponse(KnxMessage):
         else:
             self.header['service_type'] = 0x0202
 
-    def pack_knx_message(self):
-        pass
-
     def _pack_knx_body(self):
-        pass
+        raise NotImplementedError
 
     def _unpack_knx_body(self, message):
-        message = io.BytesIO(message)
         try:
-            self.body['hpai'] = {}
-            self.body['hpai']['structure_length'] = self._unpack_stream('!B', message)
-            self.body['hpai']['protocol_code'] = self._unpack_stream('!B', message)
-            self.body['hpai']['ip_address'] = socket.inet_ntoa(message.read(4))
-            self.body['hpai']['port'] = self._unpack_stream('!H', message)
-
-            self.body['dib_dev_info'] = {}
-            self.body['dib_dev_info']['structure_length'] = self._unpack_stream('!B', message)
-            self.body['dib_dev_info']['description_type'] = self._unpack_stream('!B', message)
-            self.body['dib_dev_info']['knx_medium'] = self._unpack_stream('!B', message)
-            self.body['dib_dev_info']['device_status'] = self._unpack_stream('!B', message)
-            self.body['dib_dev_info']['knx_address'] = self.parse_knx_address(self._unpack_stream('!H', message))
-            self.body['dib_dev_info']['project_install_identifier'] = self._unpack_stream('!H', message)
-            self.body['dib_dev_info']['knx_device_serial'] = self._unpack_stream('!6s', message)
-            self.body['dib_dev_info']['knx_dev_multicast_address'] = self._unpack_stream('!I', message)
-            self.body['dib_dev_info']['knx_mac_address'] = self._unpack_stream('!6s', message)
-            self.body['dib_dev_info']['device_friendly_name'] = self._unpack_stream('!30s', message)
-
-            self.body['dib_supp_sv_families'] = {}
-            self.body['dib_supp_sv_families']['structure_length'] = self._unpack_stream('!B', message)
-            self.body['dib_supp_sv_families']['description_type'] = self._unpack_stream('!B', message)
-            self.body['dib_supp_sv_families']['families'] = {}
-
-            for i in range(int((self.body['dib_supp_sv_families']['structure_length']-2)/2)):
-                service_id = self._unpack_stream('!B', message)
-                version = self._unpack_stream('!B', message)
-                self.body['dib_supp_sv_families']['families'][service_id] = {}
-                self.body['dib_supp_sv_families']['families'][service_id]['version'] = version
+            message = io.BytesIO(message)
+            self.body = self._unpack_hpai(message)
+            self.body['dib_dev_info'] = self._unpack_dib_dev_info(message)
+            self.body['dib_supp_sv_families'] = self._unpack_dib_supp_sv_families(message)
         except Exception as e:
             print(e)
 
@@ -269,22 +311,15 @@ class KnxDescriptionRequest(KnxMessage):
         else:
             self.header['service_type'] = 0x0203
             self.header['total_length'] = 14
-            #self.set_source_ip(self.get_host_ip_address())
 
     def _pack_knx_body(self):
-        self.body = struct.pack('!B', 8) # structure_length
-        self.body += struct.pack('!B', 0x01) # protocol code
-        self.body += socket.inet_aton(self.source)
-        self.body += struct.pack('!H', self.port)
+        self.body = self._pack_hpai()
         return self.body
 
     def _unpack_knx_body(self, message):
-        message = io.StringIO(message)
         try:
-            self.body['structure_length'] = self._unpack_stream('!B', message)
-            self.body['protocol_code'] = self._unpack_stream('!B', message)
-            self.body['ip_address'] = socket.inet_ntoa(message.read(4))
-            self.body['port'] = self._unpack_stream('H', message)
+            message = io.BytesIO(message)
+            self.body = self._unpack_hpai(message)
         except Exception as e:
             print(e)
 
@@ -299,38 +334,19 @@ class KnxDescriptionResponse(KnxMessage):
             self.header['service_type'] = 0x0204
 
     def _pack_knx_body(self):
-        pass
+        raise NotImplementedError
 
     def _unpack_knx_body(self, message):
         message = io.BytesIO(message)
         try:
-            self.body['dib_dev_info'] = {}
-            self.body['dib_dev_info']['structure_length'] = self._unpack_stream('!B', message)
-            self.body['dib_dev_info']['description_type'] = self._unpack_stream('!B', message)
-            self.body['dib_dev_info']['knx_medium'] = self._unpack_stream('!B', message)
-            self.body['dib_dev_info']['device_status'] = self._unpack_stream('!B', message)
-            self.body['dib_dev_info']['knx_address'] = self.parse_knx_address(self._unpack_stream('!H', message))
-            self.body['dib_dev_info']['project_install_identifier'] = self._unpack_stream('!H', message)
-            self.body['dib_dev_info']['knx_device_serial'] = self.parse_knx_device_serial(self._unpack_stream('!6s', message))
-            self.body['dib_dev_info']['knx_dev_multicast_address'] = socket.inet_ntoa(message.read(4))
-            self.body['dib_dev_info']['knx_mac_address'] = self.parse_mac_address(self._unpack_stream('!6s', message))
-            self.body['dib_dev_info']['device_friendly_name'] = self._unpack_stream('!30s', message)
-
-            self.body['dib_supp_sv_families'] = {}
-            self.body['dib_supp_sv_families']['structure_length'] = self._unpack_stream('!B', message)
-            self.body['dib_supp_sv_families']['description_type'] = self._unpack_stream('!B', message)
-            self.body['dib_supp_sv_families']['families'] = {}
-
-            for i in range(int((self.body['dib_supp_sv_families']['structure_length']-2)/2)):
-                service_id = self._unpack_stream('!B', message)
-                version = self._unpack_stream('!B', message)
-                self.body['dib_supp_sv_families']['families'][service_id] = {}
-                self.body['dib_supp_sv_families']['families'][service_id]['version'] = version
+            message = io.BytesIO(message)
+            self.body['dib_dev_info'] = self._unpack_dib_dev_info(message)
+            self.body['dib_supp_sv_families'] = self._unpack_dib_supp_sv_families(message)
         except Exception as e:
             print(e)
 
 
-class KnxConnectionRequest(KnxMessage):
+class KnxConnectRequest(KnxMessage):
 
     def __init__(self, message=None, sockname=None):
         try:
@@ -345,41 +361,28 @@ class KnxConnectionRequest(KnxMessage):
         else:
             self.header['service_type'] = 0x0205
             self.header['total_length'] = 26
-            #self.set_source_ip(self.get_host_ip_address())
 
     def _pack_knx_body(self):
-        # discovery endpoint
-        self.body = struct.pack('!B', 8) # structure_length
-        self.body += struct.pack('!B', 0x01) # protocol code
-        self.body += socket.inet_aton(self.source)
-        self.body += struct.pack('!H', self.port)
-        # HPAI
-        self.body += struct.pack('!B', 8) # structure_length
-        self.body += struct.pack('!B', 0x01) # protocol code
-        self.body += socket.inet_aton(self.source)
-        self.body += struct.pack('!H', self.port)
-        # connection request information
-        self.body += struct.pack('!B', 4) # structure_length
-        self.body += struct.pack('!B', 0x04) # connection type
-        self.body += struct.pack('!B', 0x02) # knx layer, TUNNEL_LINKLAYER
-        self.body += struct.pack('!B', 0x00) # reserved
+        # Discovery endpoint
+        self.body = self._pack_hpai()
+        # Data endpoint
+        self.body += self._pack_hpai()
+        # Connection request information
+        self.body += struct.pack('!B', 4)  # structure_length
+        self.body += struct.pack('!B', 0x04)  # connection type
+        self.body += struct.pack('!B', 0x02)  # knx layer, TUNNEL_LINKLAYER
+        self.body += struct.pack('!B', 0x00)  # reserved
         return self.body
 
     def _unpack_knx_body(self, message):
-        message = io.StringIO(message)
         try:
-            self.body['structure_length'] = self._unpack_stream('!B', message)
-            self.body['protocol_code'] = self._unpack_stream('!B', message)
-            self.body['ip_address'] = socket.inet_ntoa(message.read(4))
-            self.body['port'] = self._unpack_stream('H', message)
-
-            self.body['data_endpoint'] = {}
-            self.body['data_endpoint']['structure_length'] = self._unpack_stream('!B', message)
-            self.body['data_endpoint']['protocol_code'] = self._unpack_stream('!B', message)
-            self.body['data_endpoint']['ip_address'] = socket.inet_ntoa(message.read(4))
-            self.body['data_endpoint']['port'] = self._unpack_stream('!H', message)
-
-            self.body['connection_request_information'] = {}
+            message = io.BytesIO(message)
+            # Discovery endpoint
+            self.body = self._unpack_hpai(message)
+            # Data endpoint
+            self.body['data_endpoint'] = self._unpack_hpai(message)
+            # Connection request information
+            self.body['connection_request_information'] = dict()
             self.body['connection_request_information']['structure_length'] = self._unpack_stream('!B', message)
             self.body['connection_request_information']['connection_type'] = self._unpack_stream('!B', message)
             self.body['connection_request_information']['knx_layer'] = self._unpack_stream('!B', message)
@@ -388,7 +391,7 @@ class KnxConnectionRequest(KnxMessage):
             print(e)
 
 
-class KnxConnectionResponse(KnxMessage):
+class KnxConnectResponse(KnxMessage):
     ERROR = None
 
     def __init__(self, message=None):
@@ -398,41 +401,31 @@ class KnxConnectionResponse(KnxMessage):
         else:
             self.header['service_type'] = 0x0206
             self.header['total_length'] = 20
-            #self.set_source_ip(self.get_host_ip_address())
-
-    def pack_knx_message(self):
-        pass
 
     def _pack_knx_body(self):
-        pass
+        raise NotImplementedError
 
     def _unpack_knx_body(self, message):
-        message = io.BytesIO(message)
         try:
+            message = io.BytesIO(message)
             self.body['communication_channel_id'] = self._unpack_stream('!B', message)
             self.body['status'] = self._unpack_stream('!B', message)
 
             if self.body['status'] != 0x00:
                 # the device encountered an error!
                 # TODO: implement some kind of retries and waiting periods
-                self.ERROR = knx_status_codes[self.body['status']]
+                self.ERROR = KNX_STATUS_CODES[self.body['status']]
                 print('KnxConnectionResponse ERROR: {}'.format(self.ERROR))
                 return
 
-            self.body['hpai'] = {}
-            self.body['hpai']['structure_length'] = self._unpack_stream('!B', message)
-            self.body['hpai']['protocol_code'] = self._unpack_stream('!B', message)
-            self.body['hpai']['ip_address'] = socket.inet_ntoa(message.read(4))
-            self.body['hpai']['port'] = self._unpack_stream('!H', message)
-
-            self.body['data_block'] = {}
+            self.body['hpai'] = self._unpack_hpai(message)
+            # Connection response data block
+            self.body['data_block'] = dict()
             self.body['data_block']['structure_length'] = self._unpack_stream('!B', message)
             self.body['data_block']['connection_type'] = self._unpack_stream('!B', message)
             self.body['data_block']['knx_address'] = self.parse_knx_address(self._unpack_stream('!H', message))
         except Exception as e:
             print(e)
-            print(message.read())
-            return
 
 
 class KnxTunnellingRequest(KnxMessage):
@@ -449,11 +442,6 @@ class KnxTunnellingRequest(KnxMessage):
         self.sequence_count = sequence_count
 
         # TODO: just for testing use fixed source/destination address
-        #self.knx_source = knx_source
-        #self.knx_destination = knx_destination
-        #self.knx_source = libknx.utils.knx_address_ntoa('0.0.0')
-        #self.knx_destination = libknx.utils.knx_address_ntoa('0.0.1')
-
         self.knx_source = self.pack_knx_address('0.0.0')
 
         if message:
@@ -462,45 +450,26 @@ class KnxTunnellingRequest(KnxMessage):
         else:
             self.header['service_type'] = 0x0420
             self.header['total_length'] = 21
-            #self.set_source_ip(self.get_host_ip_address())
 
     def _pack_knx_body(self):
-        # discovery endpoint
         self.body = struct.pack('!B', 4) # structure_length
         self.body += struct.pack('!B', self.communication_channel) # channel id
         self.body += struct.pack('!B', self.sequence_count) # sequence counter
         self.body += struct.pack('!B', 0) # reserved
-        # cEMI (?)
-        self.body += struct.pack('!B', 0x11) # message code
-        self.body += struct.pack('!B', 0) # add information length
-        self.body += struct.pack('!B', 0xbc) # controlfield 1
-        self.body += struct.pack('!B', 0xf0) # controlfield 2
-        self.body += struct.pack('!H', self.knx_source) # source address (KNX address)
-        self.body += struct.pack('!H', self.knx_destination) # destination address (KNX address)
-        self.body += struct.pack('!B', 0x01) # NPDU length
-        self.body += struct.pack('!B', 0x00) # TPCI: UDT (?)
-        self.body += struct.pack('!B', 0x81) # APCI (?)
+        # cEMI
+        self.body += self._pack_cemi()
         return self.body
 
     def _unpack_knx_body(self, message):
-        #message = io.StringIO(message)
-        message = io.BytesIO(message)
+
         try:
+            message = io.BytesIO(message)
             self.body['structure_length'] = self._unpack_stream('!B', message)
             self.body['communication_channel_id'] = self._unpack_stream('!B', message)
             self.body['sequence_counter'] = self._unpack_stream('!B', message)
             self.body['reserved'] = self._unpack_stream('!B', message)
-
-            self.body['cemi'] = {}
-            self.body['cemi']['message_code'] = self._unpack_stream('!B', message)
-            self.body['cemi']['information_length'] = self._unpack_stream('!B', message)
-            self.body['cemi']['controlfield_1'] = self._unpack_stream('!B', message)
-            self.body['cemi']['controlfield_2'] = self._unpack_stream('!B', message)
-            self.body['cemi']['knx_source'] = self._unpack_stream('!H', message)
-            self.body['cemi']['knx_destination'] = self._unpack_stream('!H', message)
-            self.body['cemi']['npdu'] = self._unpack_stream('!B', message)
-            self.body['cemi']['tcpi'] = self._unpack_stream('!B', message)
-            self.body['cemi']['apci'] = self._unpack_stream('!B', message)
+            # cEMI
+            self.body['cemi'] = self._unpack_cemi(message)
         except Exception as e:
             print(e)
 
@@ -517,7 +486,6 @@ class KnxTunnellingAck(KnxMessage):
         else:
             self.header['service_type'] = 0x0421
             self.header['total_length'] = 10
-            #self.set_source_ip(self.get_host_ip_address())
 
     def _pack_knx_body(self):
         self.body = struct.pack('!B', 4) # structure_length
@@ -527,16 +495,14 @@ class KnxTunnellingAck(KnxMessage):
         return self.body
 
     def _unpack_knx_body(self, message):
-        message = io.BytesIO(message)
         try:
+            message = io.BytesIO(message)
             self.body['structure_length'] = self._unpack_stream('!B', message)
             self.body['communication_channel_id'] = self._unpack_stream('!B', message)
             self.body['sequence_counter'] = self._unpack_stream('!B', message)
             self.body['status'] = self._unpack_stream('!B', message)
         except Exception as e:
             print(e)
-            print(message.read())
-            return
 
 
 class KnxDisconnectRequest(KnxMessage):
@@ -559,27 +525,19 @@ class KnxDisconnectRequest(KnxMessage):
             self.header['total_length'] = 16
 
     def _pack_knx_body(self):
-        # discovery endpoint
         self.body = struct.pack('!B', self.communication_channel) # channel id
         self.body += struct.pack('!B', 0) # reserved
         # HPAI
-        self.body += struct.pack('!B', 8) # structure_length
-        self.body += struct.pack('!B', 0x01) # protocol code
-        self.body += socket.inet_aton(self.source)
-        self.body += struct.pack('!H', self.port)
+        self.body += self._pack_hpai()
         return self.body
 
     def _unpack_knx_body(self, message):
-        message = io.StringIO(message)
         try:
+            message = io.BytesIO(message)
             self.body['communication_channel_id'] = self._unpack_stream('!B', message)
             self.body['reserved'] = self._unpack_stream('!B', message)
-
-            self.body['hpai'] = {}
-            self.body['hpai']['structure_length'] = self._unpack_stream('!B', message)
-            self.body['hpai']['protocol_code'] = self._unpack_stream('!B', message)
-            self.body['hpai']['ip_address'] = socket.inet_ntoa(message.read(4))
-            self.body['hpai']['port'] = self._unpack_stream('!H', message)
+            # HPAI
+            self.body['hpai'] = self._unpack_hpai(message)
         except Exception as e:
             print(e)
 
@@ -588,6 +546,7 @@ class KnxDisconnectResponse(KnxMessage):
 
     def __init__(self, message=None, communication_channel=None,
                  knx_source=None, knx_destination=None):
+
         self.communication_channel = communication_channel
 
         if message:
@@ -604,8 +563,8 @@ class KnxDisconnectResponse(KnxMessage):
         return self.body
 
     def _unpack_knx_body(self, message):
-        message = io.StringIO(message)
         try:
+            message = io.BytesIO(message)
             self.body['communication_channel_id'] = self._unpack_stream('!B', message)
             self.body['status'] = self._unpack_stream('!B', message)
         except Exception as e:
@@ -625,4 +584,3 @@ class KnxDisconnectResponse(KnxMessage):
 # TODO: implement device configuration requests
 #       DEVICE_CONFIGURATION_REQUEST
 #       DEVICE_CONFIGURATION_ACK
-
