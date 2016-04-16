@@ -3,8 +3,11 @@ import struct
 import socket
 import io
 import collections
+import logging
 
 import libknx.utils
+
+LOGGER = logging.getLogger(__name__)
 
 __all__ = ['KNX_CONSTANTS',
            'KNX_SERVICES',
@@ -148,7 +151,7 @@ class KnxMessage(object):
             self.header['total_length'] = struct.unpack('!BBHH', message[:6])
             return message[6:]
         except struct.error as e:
-            print(e)
+            LOGGER.exception(e)
 
     def _pack_knx_body(self):
         """Subclasses must define this method."""
@@ -160,8 +163,7 @@ class KnxMessage(object):
             buf = stream.read(struct.calcsize(fmt))
             return struct.unpack(fmt, buf)[0]
         except struct.error as e:
-            print(e)
-            return
+            LOGGER.exception(e)
 
     def _parse_knx_body_hpai(self, message):
         try:
@@ -173,8 +175,7 @@ class KnxMessage(object):
             self.body['hpai']['ip_address'] = socket.inet_aton(self.body['hpai']['ip_address']) # most likely not works
             return message[8:]
         except struct.error as e:
-            print(e)
-            return False
+            LOGGER.exception(e)
 
     def _pack_hpai(self):
         hpai = struct.pack('!B', 8) # structure_length
@@ -271,7 +272,7 @@ class KnxSearchRequest(KnxMessage):
             message = io.BytesIO(message)
             self.body = self._unpack_hpai(message)
         except Exception as e:
-            print(e)
+            LOGGER.exception(e)
 
 
 class KnxSearchResponse(KnxMessage):
@@ -293,7 +294,7 @@ class KnxSearchResponse(KnxMessage):
             self.body['dib_dev_info'] = self._unpack_dib_dev_info(message)
             self.body['dib_supp_sv_families'] = self._unpack_dib_supp_sv_families(message)
         except Exception as e:
-            print(e)
+            LOGGER.exception(e)
 
 
 class KnxDescriptionRequest(KnxMessage):
@@ -321,7 +322,7 @@ class KnxDescriptionRequest(KnxMessage):
             message = io.BytesIO(message)
             self.body = self._unpack_hpai(message)
         except Exception as e:
-            print(e)
+            LOGGER.exception(e)
 
 
 class KnxDescriptionResponse(KnxMessage):
@@ -343,7 +344,7 @@ class KnxDescriptionResponse(KnxMessage):
             self.body['dib_dev_info'] = self._unpack_dib_dev_info(message)
             self.body['dib_supp_sv_families'] = self._unpack_dib_supp_sv_families(message)
         except Exception as e:
-            print(e)
+            LOGGER.exception(e)
 
 
 class KnxConnectRequest(KnxMessage):
@@ -388,7 +389,7 @@ class KnxConnectRequest(KnxMessage):
             self.body['connection_request_information']['knx_layer'] = self._unpack_stream('!B', message)
             self.body['connection_request_information']['reserved'] = self._unpack_stream('!B', message)
         except Exception as e:
-            print(e)
+            LOGGER.exception(e)
 
 
 class KnxConnectResponse(KnxMessage):
@@ -425,7 +426,7 @@ class KnxConnectResponse(KnxMessage):
             self.body['data_block']['connection_type'] = self._unpack_stream('!B', message)
             self.body['data_block']['knx_address'] = self.parse_knx_address(self._unpack_stream('!H', message))
         except Exception as e:
-            print(e)
+            LOGGER.exception(e)
 
 
 class KnxTunnellingRequest(KnxMessage):
@@ -471,7 +472,7 @@ class KnxTunnellingRequest(KnxMessage):
             # cEMI
             self.body['cemi'] = self._unpack_cemi(message)
         except Exception as e:
-            print(e)
+            LOGGER.exception(e)
 
 
 class KnxTunnellingAck(KnxMessage):
@@ -502,7 +503,7 @@ class KnxTunnellingAck(KnxMessage):
             self.body['sequence_counter'] = self._unpack_stream('!B', message)
             self.body['status'] = self._unpack_stream('!B', message)
         except Exception as e:
-            print(e)
+            LOGGER.exception(e)
 
 
 class KnxDisconnectRequest(KnxMessage):
@@ -539,7 +540,7 @@ class KnxDisconnectRequest(KnxMessage):
             # HPAI
             self.body['hpai'] = self._unpack_hpai(message)
         except Exception as e:
-            print(e)
+            LOGGER.exception(e)
 
 
 class KnxDisconnectResponse(KnxMessage):
@@ -568,7 +569,7 @@ class KnxDisconnectResponse(KnxMessage):
             self.body['communication_channel_id'] = self._unpack_stream('!B', message)
             self.body['status'] = self._unpack_stream('!B', message)
         except Exception as e:
-            print(e)
+            LOGGER.exception(e)
 
 
 # TODO: implement CONNECTIONSTATE_REQUEST aka KNX Heartbeat
