@@ -39,36 +39,39 @@ class KnxGatewaySearch(asyncio.DatagramProtocol):
 
 class KnxGatewayDescription(asyncio.DatagramProtocol):
 
-    def __init__(self, future, loop=None):
+    def __init__(self, future, loop=None, timeout=2):
         self.future = future
         self.loop = loop or asyncio.get_event_loop()
         self.transport = None
         self.response = None
+        self.timeout = timeout
 
     def connection_made(self, transport):
         self.transport = transport
         self.peername = self.transport.get_extra_info('peername')
         self.sockname = self.transport.get_extra_info('sockname')
+        self.wait = self.loop.call_later(self.timeout, self.connection_timeout)
 
-        # initialize description request
         packet = libknx.messages.KnxDescriptionRequest(sockname=self.sockname)
         packet.pack_knx_message()
-
         self.transport.sendto(packet.get_message())
-        LOGGER.debug('KnxDescriptionRequest sent')
+
+    def connection_timeout(self):
+        LOGGER.debug('Description timeout')
+        self.transport.close()
+        self.future.set_result(False)
 
     def datagram_received(self, data, addr):
+        self.wait.cancel()
+        self.transport.close()
         try:
             LOGGER.debug('Parsing KnxDescriptionResponse')
             self.response = libknx.KnxDescriptionResponse(data)
 
             if self.response:
-                LOGGER.debug("Got valid description request back!")
                 self.future.set_result(self.response)
             else:
                 LOGGER.info('Not a valid description response!')
                 self.future.set_result(False)
         except Exception as e:
             LOGGER.exception(e)
-
-        self.transport.close()
