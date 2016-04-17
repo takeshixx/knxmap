@@ -338,7 +338,6 @@ class KnxDescriptionResponse(KnxMessage):
         raise NotImplementedError
 
     def _unpack_knx_body(self, message):
-        message = io.BytesIO(message)
         try:
             message = io.BytesIO(message)
             self.body['dib_dev_info'] = self._unpack_dib_dev_info(message)
