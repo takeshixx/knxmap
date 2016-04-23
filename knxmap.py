@@ -90,7 +90,7 @@ KnxTargetReport = collections.namedtuple(
 class KnxScanner():
     """The main scanner instance that takes care of scheduling workers for the targets."""
 
-    def __init__(self, targets=set(), max_workers=10, loop=None, ):
+    def __init__(self, targets=None, max_workers=10, loop=None, ):
         self.loop = loop or asyncio.get_event_loop()
         self.max_workers = max_workers
         # the Queue contains all targets
@@ -103,7 +103,10 @@ class KnxScanner():
         self.dev_add_knx_targets(
             self.dev_knx_address_range())
 
-        self.targets = targets
+        if targets:
+            self.targets = targets
+        else:
+            self.targets = set()
         self.alive_targets = set()
         self.knx_gateways = list()
         self.bus_devices = list()
@@ -317,7 +320,7 @@ class KnxScanner():
         elif bus_mode and (1 is 2):
             # target = yield from self.gateway_queue.get()
             future = asyncio.Future()
-            bus_con = libknx.KnxBusConnection(future)
+            bus_con = libknx.KnxTunnelConnection(future)
             transport, protocol = yield from self.loop.create_datagram_endpoint(
                 lambda: bus_con,
                 # remote_addr=(target[0], target[1]))
@@ -379,7 +382,7 @@ class KnxScanner():
         print('Starting bus scan on {}'.format(knx_gateway.host))
         queue = self.dev_get_bus_queue()
         future = asyncio.Future()
-        bus_con = libknx.KnxBusConnection(future)
+        bus_con = libknx.KnxTunnelConnection(future)
         transport, protocol = yield from self.loop.create_datagram_endpoint(
             lambda: bus_con, remote_addr=(knx_gateway.host, knx_gateway.port))
 
