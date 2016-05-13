@@ -18,9 +18,9 @@ if sys.version_info.major < 3 or \
     print('At least Python version 3.3 is required to run this script!')
     sys.exit(1)
 
-# Python 3.4 ships with asyncio in the standard libraries. Users with Python 3.3
-# need to install it, e.g.: pip install asyncio
 try:
+    # Python 3.4 ships with asyncio in the standard libraries. Users with Python 3.3
+    # need to install it, e.g.: pip install asyncio
     import asyncio
 except ImportError:
     print('Please install the asyncio module!')
@@ -460,7 +460,7 @@ class Targets():
 
 def main():
     args = ARGS.parse_args()
-    if not args.targets and not args.search:
+    if not args.targets and not args.search_mode:
         ARGS.print_help()
         return 1
 
@@ -474,7 +474,7 @@ def main():
 
     loop = asyncio.get_event_loop()
 
-    if args.search:
+    if args.search_mode:
         if args.iface:
             if os.geteuid() != 0:
                 LOGGER.error('-i/--interface option requires superuser privileges')
