@@ -79,5 +79,37 @@ CEMI_PRIMITIVES = {
     0x29: 'L_Data.ind'}  # Receive a data frame
 
 
+CEMI_PRIORITIES = {
+    0x00: 'system',
+    0x01: 'normal',
+    0x02: 'urgent',
+    0x03: 'low'}
+
+
+COMM_TYPES = {
+    0x00: 'Unnumbered Data Packet (UDP)',
+    0x01: 'Numbered Data Packet (NDP)',
+    0x02: 'Unnumbered Control Data (UCD)',
+    0x03: 'Numbered Control Data (NCD)'}
+
+
+APCI = {0x00: 'GroupValueRead',
+        0x01: 'GroupValueResponse',
+        0x02: 'GroupValueWrite',
+        0x03: 'IndividualAddrWrite',
+        0x04: 'IndividualAddrRequest',
+        0x05: 'IndividualAddrResponse',
+        0x06: 'AdcRead',
+        0x07: 'AdcResponse',
+        0x08: 'MemoryRead',
+        0x09: 'MemoryResponse',
+        0x0a: 'MemoryWrite',
+        0x0b: 'UserMessage',
+        0x0c: 'MaskVersionRead',
+        0x0d: 'MaskVersionResponse',
+        0x0e: 'Restart',
+        0x0f: 'Escape'}
+
+
 class Error(Exception):
     pass
