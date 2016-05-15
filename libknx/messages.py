@@ -7,7 +7,9 @@ import struct
 
 from .core import *
 
-__all__ = ['KnxSearchRequest',
+__all__ = ['get_message_type',
+           'parse_message',
+           'KnxSearchRequest',
            'KnxSearchResponse',
            'KnxDescriptionRequest',
            'KnxDescriptionResponse',
@@ -21,6 +23,48 @@ __all__ = ['KnxSearchRequest',
            'KnxDisconnectResponse']
 
 LOGGER = logging.getLogger(__name__)
+
+
+def get_message_type(message):
+    try:
+        header = {}
+        header['header_length'], \
+        header['protocol_version'], \
+        header['service_type'], \
+        header['total_length'] = struct.unpack('>BBHH', message[:6])
+        message_type = int(header['service_type'])
+    except Exception as e:
+        LOGGER.exception(e)
+        return
+    return message_type
+
+
+def parse_message(data):
+    message_type = get_message_type(data)
+
+    if message_type == 0x0206:  # CONNECT_RESPONSE
+        LOGGER.debug('Parsing KnxConnectResponse')
+        return KnxConnectResponse(data)
+    elif message_type == 0x0420:  # TUNNELLING_REQUEST
+        return KnxTunnellingRequest(data)
+    elif message_type == 0x0421:  # TUNNELLING_ACK
+        LOGGER.debug('Parsing KnxTunnelingAck')
+        return KnxTunnellingAck(data)
+    elif message_type == 0x0207: # CONNECTIONSTATE_REQUEST
+        LOGGER.debug('Parsing KnxConnectionStateRequest')
+        return KnxConnectionStateRequest(data)
+    elif message_type == 0x0208:  # CONNECTIONSTATE_RESPONSE
+        LOGGER.debug('Parsing KnxConnectionStateResponse')
+        return KnxConnectionStateResponse(data)
+    elif message_type == 0x0209:  # DISCONNECT_REQUEST
+        LOGGER.debug('Parsing KnxDisconnectRequest')
+        return KnxDisconnectResponse(data)
+    elif message_type == 0x020a:  # DISCONNECT_RESPONSE
+        LOGGER.debug('Parsing KnxDisconnectResponse')
+        return KnxDisconnectResponse(data)
+    else:
+        LOGGER.error('Unknown message type: '.format(message_type))
+        return
 
 
 class KnxMessage(object):
@@ -314,17 +358,17 @@ class KnxSearchRequest(KnxMessage):
 
     def __init__(self, message=None, sockname=None):
         super(KnxSearchRequest, self).__init__()
-        try:
-            self.source, self.port = sockname
-        except TypeError:
-            self.source = None
-            self.port = None
-
         if message:
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0201
             self.header['total_length'] = 14
+            try:
+                self.source, self.port = sockname
+                self.pack_knx_message()
+            except TypeError:
+                self.source = None
+                self.port = None
 
     def _pack_knx_body(self):
         self.body = self._pack_hpai()
@@ -346,6 +390,7 @@ class KnxSearchResponse(KnxMessage):
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0202
+            self.pack_knx_message()
 
     def _pack_knx_body(self):
         raise NotImplementedError
@@ -364,17 +409,17 @@ class KnxDescriptionRequest(KnxMessage):
 
     def __init__(self, message=None, sockname=None):
         super(KnxDescriptionRequest, self).__init__()
-        try:
-            self.source, self.port = sockname
-        except TypeError:
-            self.source = None
-            self.port = None
-
         if message:
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0203
             self.header['total_length'] = 14
+            try:
+                self.source, self.port = sockname
+                self.pack_knx_message()
+            except TypeError:
+                self.source = None
+                self.port = None
 
     def _pack_knx_body(self):
         self.body = self._pack_hpai()
@@ -396,6 +441,7 @@ class KnxDescriptionResponse(KnxMessage):
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0204
+            self.pack_knx_message()
 
     def _pack_knx_body(self):
         raise NotImplementedError
@@ -410,20 +456,25 @@ class KnxDescriptionResponse(KnxMessage):
 
 
 class KnxConnectRequest(KnxMessage):
+    layer_types = {
+        0x02: 'TUNNEL_LINKLAYER',
+        0x04: 'TUNNEL_RAW',
+        0x80: 'TUNNEL_BUSMONITOR'}
 
-    def __init__(self, message=None, sockname=None):
+    def __init__(self, message=None, sockname=None, layer_type=0x02):
         super(KnxConnectRequest, self).__init__()
-        try:
-            self.source, self.port = sockname
-        except TypeError:
-            self.source = None
-            self.port = None
-
         if message:
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0205
             self.header['total_length'] = 26
+            self.layer_type = layer_type
+            try:
+                self.source, self.port = sockname
+                self.pack_knx_message()
+            except TypeError:
+                self.source = None
+                self.port = None
 
     def _pack_knx_body(self):
         # Discovery endpoint
@@ -433,7 +484,7 @@ class KnxConnectRequest(KnxMessage):
         # Connection request information
         self.body += struct.pack('!B', 4)  # structure_length
         self.body += struct.pack('!B', 0x04)  # connection type # TODO: implement other connections (routing, object server)
-        self.body += struct.pack('!B', 0x02)  # knx layer, TUNNEL_LINKLAYER
+        self.body += struct.pack('!B', self.layer_type)  # knx layer type
         self.body += struct.pack('!B', 0x00)  # reserved
         return self.body
 
@@ -456,6 +507,7 @@ class KnxConnectRequest(KnxMessage):
 
 class KnxConnectResponse(KnxMessage):
     ERROR = None
+    ERROR_CODE = None
 
     def __init__(self, message=None):
         super(KnxConnectResponse, self).__init__()
@@ -464,6 +516,7 @@ class KnxConnectResponse(KnxMessage):
         else:
             self.header['service_type'] = 0x0206
             self.header['total_length'] = 20
+            self.pack_knx_message()
 
     def _pack_knx_body(self):
         raise NotImplementedError
@@ -475,10 +528,9 @@ class KnxConnectResponse(KnxMessage):
             self.body['status'] = self._unpack_stream('!B', message)
 
             if self.body['status'] != 0x00:
-                # the device encountered an error!
                 # TODO: implement some kind of retries and waiting periods
                 self.ERROR = KNX_STATUS_CODES[self.body['status']]
-                print('KnxConnectionResponse ERROR: {}'.format(self.ERROR))
+                self.ERROR_CODE = self.body['status']
                 return
 
             self.body['hpai'] = self._unpack_hpai(message)
@@ -496,24 +548,22 @@ class KnxTunnellingRequest(KnxMessage):
     def __init__(self, message=None, sockname=None, communication_channel=None,
                  knx_source=None, knx_destination=None, sequence_count=0, message_code=0x11):
         super(KnxTunnellingRequest, self).__init__()
-        try:
-            self.source, self.port = sockname
-        except TypeError:
-            self.source = None
-            self.port = None
-
-        self.communication_channel = communication_channel
-        self.sequence_count = sequence_count
-        self.cemi_message_code = message_code
-
-        # TODO: just for testing use fixed source/destination address
-        self.knx_source = self.pack_knx_address('0.0.0')
-
         if message:
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0420
             self.header['total_length'] = 21
+            self.communication_channel = communication_channel
+            self.sequence_count = sequence_count
+            self.cemi_message_code = message_code
+            # TODO: just for testing use fixed source/destination address
+            self.knx_source = self.pack_knx_address('0.0.0')
+            try:
+                self.source, self.port = sockname
+                self.pack_knx_message()
+            except TypeError:
+                self.source = None
+                self.port = None
 
     def _pack_knx_body(self):
         self.body = struct.pack('!B', 4) # structure_length
@@ -542,14 +592,14 @@ class KnxTunnellingAck(KnxMessage):
 
     def __init__(self, message=None, communication_channel=None, sequence_count=0):
         super(KnxTunnellingAck, self).__init__()
-        self.communication_channel = communication_channel
-        self.sequence_count = sequence_count
-
         if message:
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0421
             self.header['total_length'] = 10
+            self.communication_channel = communication_channel
+            self.sequence_count = sequence_count
+            self.pack_knx_message()
 
     def _pack_knx_body(self):
         self.body = struct.pack('!B', 4) # structure_length
@@ -574,19 +624,18 @@ class KnxConnectionStateRequest(KnxMessage):
     def __init__(self, message=None, sockname=None, communication_channel=None,
                  knx_source=None, knx_destination=None):
         super(KnxConnectionStateRequest, self).__init__()
-        try:
-            self.source, self.port = sockname
-        except TypeError:
-            self.source = None
-            self.port = None
-
-        self.communication_channel = communication_channel
-
         if message:
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0207
             self.header['total_length'] = 16
+            self.communication_channel = communication_channel
+            try:
+                self.source, self.port = sockname
+                self.pack_knx_message()
+            except TypeError:
+                self.source = None
+                self.port = None
 
     def _pack_knx_body(self):
         self.body = struct.pack('!B', self.communication_channel) # channel id
@@ -611,13 +660,13 @@ class KnxConnectionStateResponse(KnxMessage):
     def __init__(self, message=None, communication_channel=None,
                  knx_source=None, knx_destination=None):
         super(KnxConnectionStateResponse, self).__init__()
-        self.communication_channel = communication_channel
-
         if message:
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0208
             self.header['total_length'] = 8
+            self.communication_channel = communication_channel
+            self.pack_knx_message()
 
     def _pack_knx_body(self):
         # discovery endpoint
@@ -639,19 +688,18 @@ class KnxDisconnectRequest(KnxMessage):
     def __init__(self, message=None, sockname=None, communication_channel=None,
                  knx_source=None, knx_destination=None):
         super(KnxDisconnectRequest, self).__init__()
-        try:
-            self.source, self.port = sockname
-        except TypeError:
-            self.source = None
-            self.port = None
-
-        self.communication_channel = communication_channel
-
         if message:
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0209
             self.header['total_length'] = 16
+            self.communication_channel = communication_channel
+            try:
+                self.source, self.port = sockname
+                self.pack_knx_message()
+            except TypeError:
+                self.source = None
+                self.port = None
 
     def _pack_knx_body(self):
         self.body = struct.pack('!B', self.communication_channel) # channel id
@@ -676,13 +724,13 @@ class KnxDisconnectResponse(KnxMessage):
     def __init__(self, message=None, communication_channel=None,
                  knx_source=None, knx_destination=None):
         super(KnxDisconnectResponse, self).__init__()
-        self.communication_channel = communication_channel
-
         if message:
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x020a
             self.header['total_length'] = 8
+            self.communication_channel = communication_channel
+            self.pack_knx_message()
 
     def _pack_knx_body(self):
         # discovery endpoint
