@@ -41,7 +41,6 @@ def get_message_type(message):
 
 def parse_message(data):
     message_type = get_message_type(data)
-
     if message_type == 0x0206:  # CONNECT_RESPONSE
         LOGGER.debug('Parsing KnxConnectResponse')
         return KnxConnectResponse(data)
@@ -58,7 +57,7 @@ def parse_message(data):
         return KnxConnectionStateResponse(data)
     elif message_type == 0x0209:  # DISCONNECT_REQUEST
         LOGGER.debug('Parsing KnxDisconnectRequest')
-        return KnxDisconnectResponse(data)
+        return KnxDisconnectRequest(data)
     elif message_type == 0x020a:  # DISCONNECT_RESPONSE
         LOGGER.debug('Parsing KnxDisconnectResponse')
         return KnxDisconnectResponse(data)
@@ -75,7 +74,7 @@ class KnxMessage(object):
         'total_length': None}
 
     def __init__(self):
-        self.body = {}
+        self.body = collections.OrderedDict()
         self.message = None
         self.source = None
         self.port = None
@@ -307,6 +306,12 @@ class KnxMessage(object):
         def clear_bit(value, bit):
             return value & ~(1 << bit)
 
+        def is_set_bit(value, pos):
+            if (value&(2**pos)) is not 0:
+                return True
+            else:
+                return False
+
         def gen_cf1():
             cf = 0
             cf = clear_bit(cf, 0) # confirm (no error)
@@ -328,7 +333,7 @@ class KnxMessage(object):
             cf = clear_bit(cf, 4) # hop count (6)
             cf = set_bit(cf, 5)
             cf = set_bit(cf, 6)
-            cf = set_bit(cf, 7) # address type (group address)
+            cf = clear_bit(cf, 7) # address type (group address)
             return cf
 
         cemi += struct.pack('!B', gen_cf1()) # controlfield 1
@@ -337,20 +342,31 @@ class KnxMessage(object):
         cemi += struct.pack('!H', self.knx_destination) # KNX destination address (either group or physical)
 
         cemi += struct.pack('!B', 0x01) # Data length
-        cemi += struct.pack('!H', 0x0081) # Application Protocol Data Unit (APDU) - the actual payload (TPCI, APCI)
+        #cemi += struct.pack('!H', 0x0081) # Application Protocol Data Unit (APDU) - the actual payload (TPCI, APCI)
+        cemi += struct.pack('!H', 0x0300)  # Application Protocol Data Unit (APDU) - the actual payload (TPCI, APCI)
         return cemi
 
     def _unpack_cemi(self, message):
         cemi = dict()
         cemi['message_code'] = self._unpack_stream('!B', message)
         cemi['information_length'] = self._unpack_stream('!B', message)
-        cemi['controlfield_1'] = self._unpack_stream('!B', message)
-        cemi['controlfield_2'] = self._unpack_stream('!B', message)
-        cemi['knx_source'] = self._unpack_stream('!H', message)
-        cemi['knx_destination'] = self._unpack_stream('!H', message)
-        cemi['npdu'] = self._unpack_stream('!B', message)
-        cemi['tcpi'] = self._unpack_stream('!B', message)
-        cemi['apci'] = self._unpack_stream('!B', message)
+        if cemi['information_length'] is 0:
+            cemi['controlfield_1'] = self._unpack_stream('!B', message)
+            cemi['controlfield_2'] = self._unpack_stream('!B', message)
+            cemi['knx_source'] = self._unpack_stream('!H', message)
+            cemi['knx_destination'] = self._unpack_stream('!H', message)
+            cemi['npdu'] = self._unpack_stream('!B', message)
+            cemi['tcpi'] = self._unpack_stream('!B', message)
+            cemi['apci'] = self._unpack_stream('!B', message)
+        else:
+            cemi['additional_information'] = {}
+            cemi['additional_information']['busmonitor_info'] = self._unpack_stream('!B', message)
+            cemi['additional_information']['busmonitor_info_length'] = self._unpack_stream('!B', message)
+            cemi['additional_information']['busmonitor_info_error_flags'] = self._unpack_stream('!B', message)
+            cemi['additional_information']['extended_relative_timestamp'] = self._unpack_stream('!B', message)
+            cemi['additional_information']['extended_relative_timestamp'] = self._unpack_stream('!B', message)
+            cemi['additional_information']['extended_relative_timestamp'] = self._unpack_stream('!I', message)
+            cemi['raw_frame'] = message.read()
         return cemi
 
 
@@ -458,7 +474,11 @@ class KnxDescriptionResponse(KnxMessage):
 class KnxConnectRequest(KnxMessage):
     layer_types = {
         0x02: 'TUNNEL_LINKLAYER',
+        0x03: 'DEVICE_MGMT_CONNECTION',
         0x04: 'TUNNEL_RAW',
+        0x06: 'REMLOG_CONNECTION',
+        0x07: 'REMCONF_CONNECTION',
+        0x08: 'OBJSVR_CONNECTION',
         0x80: 'TUNNEL_BUSMONITOR'}
 
     def __init__(self, message=None, sockname=None, layer_type=0x02):
@@ -556,8 +576,14 @@ class KnxTunnellingRequest(KnxMessage):
             self.communication_channel = communication_channel
             self.sequence_count = sequence_count
             self.cemi_message_code = message_code
-            # TODO: just for testing use fixed source/destination address
-            self.knx_source = self.pack_knx_address('0.0.0')
+            if knx_source:
+                self.knx_source = self.pack_knx_address(knx_source)
+            else:
+                self.knx_source = self.pack_knx_address('0.0.0') # TODO: only for dev, will be removed
+
+            if knx_destination:
+                self.set_knx_destination(knx_destination)
+
             try:
                 self.source, self.port = sockname
                 self.pack_knx_message()
@@ -575,7 +601,6 @@ class KnxTunnellingRequest(KnxMessage):
         return self.body
 
     def _unpack_knx_body(self, message):
-
         try:
             message = io.BytesIO(message)
             self.body['structure_length'] = self._unpack_stream('!B', message)
