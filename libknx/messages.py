@@ -771,13 +771,10 @@ class KnxDisconnectResponse(KnxMessage):
         except Exception as e:
             LOGGER.exception(e)
 
-
-# TODO: implement CONNECTIONSTATE_REQUEST aka KNX Heartbeat
-# * has to be sent by the client every 60s
-# * server has to respond within 10s
-# * if client doesn't send one withing 120s, server mus tear down connection
-#   -> should we even care?
-
 # TODO: implement routing requests (multicast?)
 #       ROUTING_INDICATION
 #       ROUTING_LOST_MESSAGE
+
+# TODO: implement device configuration requests
+#       DEVICE_CONFIGURATION_REQUEST
+#       DEVICE_CONFIGURATION_ACK
