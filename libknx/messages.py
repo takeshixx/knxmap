@@ -7,8 +7,7 @@ import struct
 
 from .core import *
 
-__all__ = ['get_message_type',
-           'parse_message',
+__all__ = ['parse_message',
            'KnxSearchRequest',
            'KnxSearchResponse',
            'KnxDescriptionRequest',
@@ -24,23 +23,24 @@ __all__ = ['get_message_type',
 
 LOGGER = logging.getLogger(__name__)
 
+def parse_message(data):
+    """
+    Determines the message type of data and returns a corresponding class instance. This is a helper
+    function for data that has been received from a KNXnet/IP gateway.
 
-def get_message_type(message):
+    :param data: Incoming data from a KNXnet/IP gateway.
+    :return: A class instance of any KnxMessage subclass or None if data is not a valid KNX message.
+    """
     try:
-        header = {}
-        header['header_length'], \
-        header['protocol_version'], \
-        header['service_type'], \
-        header['total_length'] = struct.unpack('>BBHH', message[:6])
-        message_type = int(header['service_type'])
-    except Exception as e:
+        _, _, message_type = struct.unpack('>BBH', data[:4])
+        message_type = int(message_type)
+    except struct.error as e:
         LOGGER.exception(e)
         return
-    return message_type
+    except ValueError as e:
+        LOGGER.exception(e)
+        return
 
-
-def parse_message(data):
-    message_type = get_message_type(data)
     if message_type == 0x0206:  # CONNECT_RESPONSE
         LOGGER.debug('Parsing KnxConnectResponse')
         return KnxConnectResponse(data)
@@ -63,7 +63,7 @@ def parse_message(data):
         return KnxDisconnectResponse(data)
     else:
         LOGGER.error('Unknown message type: '.format(message_type))
-        return
+        return None
 
 
 class KnxMessage(object):
@@ -71,7 +71,7 @@ class KnxMessage(object):
         'header_length': KNX_CONSTANTS['HEADER_SIZE_10'],
         'protocol_version': KNX_CONSTANTS['KNXNETIP_VERSION_10'],
         'service_type': None,
-        'total_length': None}
+        'total_length': 0}
 
     def __init__(self):
         self.body = collections.OrderedDict()
@@ -150,11 +150,13 @@ class KnxMessage(object):
     def get_message(self):
         """Return the current message."""
         # TODO: Maybe use this as string representation?
-        return self.message if self.message else False
+        return self.message if self.message else None
 
     def pack_knx_message(self):
+        message_body = self._pack_knx_body()
+        self.header['total_length'] = 6 + len(message_body) # header size is always 6
         self.message = self._pack_knx_header()
-        self.message += self._pack_knx_body()
+        self.message += message_body
 
     def unpack_knx_message(self, message):
         message = self._unpack_knx_header(message)
@@ -168,7 +170,7 @@ class KnxMessage(object):
                                self.header.get('service_type'),
                                self.header.get('total_length'))
         except struct.error as e:
-            print(e)
+            LOGGER.exception(e)
 
     def _unpack_knx_header(self, message):
         """Set self.header dict and return message body"""
@@ -340,10 +342,10 @@ class KnxMessage(object):
         cemi += struct.pack('!B', gen_cf2()) # controlfield 2
         cemi += struct.pack('!H', self.knx_source) # source address (KNX address)
         cemi += struct.pack('!H', self.knx_destination) # KNX destination address (either group or physical)
-
-        cemi += struct.pack('!B', 0x01) # Data length
-        #cemi += struct.pack('!H', 0x0081) # Application Protocol Data Unit (APDU) - the actual payload (TPCI, APCI)
-        cemi += struct.pack('!H', 0x0300)  # Application Protocol Data Unit (APDU) - the actual payload (TPCI, APCI)
+        cemi += struct.pack('!B', self.cemi_ndpu_len) # Data length
+        if self.cemi_ndpu_len > 0:
+            #cemi += struct.pack('!H', 0x0081) # Application Protocol Data Unit (APDU) - the actual payload (TPCI, APCI)
+            cemi += struct.pack('!H', 0x0300)  # Application Protocol Data Unit (APDU) - the actual payload (TPCI, APCI)
         return cemi
 
     def _unpack_cemi(self, message):
@@ -378,7 +380,6 @@ class KnxSearchRequest(KnxMessage):
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0201
-            self.header['total_length'] = 14
             try:
                 self.source, self.port = sockname
                 self.pack_knx_message()
@@ -429,7 +430,6 @@ class KnxDescriptionRequest(KnxMessage):
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0203
-            self.header['total_length'] = 14
             try:
                 self.source, self.port = sockname
                 self.pack_knx_message()
@@ -487,7 +487,6 @@ class KnxConnectRequest(KnxMessage):
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0205
-            self.header['total_length'] = 26
             self.layer_type = layer_type
             try:
                 self.source, self.port = sockname
@@ -535,7 +534,6 @@ class KnxConnectResponse(KnxMessage):
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0206
-            self.header['total_length'] = 20
             self.pack_knx_message()
 
     def _pack_knx_body(self):
@@ -566,13 +564,13 @@ class KnxConnectResponse(KnxMessage):
 class KnxTunnellingRequest(KnxMessage):
 
     def __init__(self, message=None, sockname=None, communication_channel=None,
-                 knx_source=None, knx_destination=None, sequence_count=0, message_code=0x11):
+                 knx_source=None, knx_destination=None, sequence_count=0, message_code=0x11,
+                 cemi_ndpu_len=1):
         super(KnxTunnellingRequest, self).__init__()
         if message:
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0420
-            self.header['total_length'] = 21
             self.communication_channel = communication_channel
             self.sequence_count = sequence_count
             self.cemi_message_code = message_code
@@ -621,7 +619,6 @@ class KnxTunnellingAck(KnxMessage):
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0421
-            self.header['total_length'] = 10
             self.communication_channel = communication_channel
             self.sequence_count = sequence_count
             self.pack_knx_message()
@@ -653,7 +650,6 @@ class KnxConnectionStateRequest(KnxMessage):
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0207
-            self.header['total_length'] = 16
             self.communication_channel = communication_channel
             try:
                 self.source, self.port = sockname
@@ -689,7 +685,6 @@ class KnxConnectionStateResponse(KnxMessage):
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0208
-            self.header['total_length'] = 8
             self.communication_channel = communication_channel
             self.pack_knx_message()
 
@@ -717,7 +712,6 @@ class KnxDisconnectRequest(KnxMessage):
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x0209
-            self.header['total_length'] = 16
             self.communication_channel = communication_channel
             try:
                 self.source, self.port = sockname
@@ -753,7 +747,6 @@ class KnxDisconnectResponse(KnxMessage):
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = 0x020a
-            self.header['total_length'] = 8
             self.communication_channel = communication_channel
             self.pack_knx_message()
 
