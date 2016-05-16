@@ -21,7 +21,6 @@ class KnxGatewaySearch(asyncio.DatagramProtocol):
         self.peername = self.transport.get_extra_info('peername')
         self.sockname = self.transport.get_extra_info('sockname')
         packet = libknx.messages.KnxSearchRequest(sockname=self.sockname)
-        packet.pack_knx_message()
         self.transport.get_extra_info('socket').sendto(packet.get_message(), ('224.0.23.12', 3671))
 
     def datagram_received(self, data, addr):
@@ -53,7 +52,6 @@ class KnxGatewayDescription(asyncio.DatagramProtocol):
         self.wait = self.loop.call_later(self.timeout, self.connection_timeout)
 
         packet = libknx.messages.KnxDescriptionRequest(sockname=self.sockname)
-        packet.pack_knx_message()
         self.transport.sendto(packet.get_message())
 
     def connection_timeout(self):
