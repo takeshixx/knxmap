@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#!/usr/bin/env python3
 import argparse
 import logging
 import os
@@ -34,16 +34,10 @@ LOGGER = logging.getLogger(__name__)
 
 # TODO: create proper arguments
 # TODO: add subcommands for scanning modes
-ARGS = argparse.ArgumentParser(description="KNX Scanner")
+ARGS = argparse.ArgumentParser(description="KNXnet/IP Scanner")
 ARGS.add_argument(
     'targets', nargs='*',
     default=[], help='Target hostnames/IP addresses')
-ARGS.add_argument(
-    '-v', '--verbose', action='count', dest='level',
-    default=2, help='Verbose logging (repeat for more verbose)')
-ARGS.add_argument(
-    '-q', '--quiet', action='store_const', const=0, dest='level',
-    default=2, help='Only log errors')
 ARGS.add_argument(
     '-p', '--port', action='store', dest='port', type=int,
     default=3671, help='UDP port to be scanned')
@@ -68,6 +62,12 @@ ARGS.add_argument(
 ARGS.add_argument(
     '--group-monitor', action='store_true', dest='group_monitor_mode',
     default=False, help='Monitor group bus messages via KNXnet/IP gateway')
+ARGS.add_argument(
+    '-v', '--verbose', action='count', dest='level',
+    default=2, help='Verbose logging (repeat for more verbose)')
+ARGS.add_argument(
+    '-q', '--quiet', action='store_const', const=0, dest='level',
+    default=2, help='Only log errors')
 
 
 class Targets():
@@ -123,7 +123,7 @@ def main():
     args = ARGS.parse_args()
     if not args.targets and not args.search_mode:
         ARGS.print_help()
-        return 1
+        sys.exit()
 
     targets = Targets(args.targets, args.port)
     levels = [logging.ERROR, logging.WARN, logging.INFO, logging.DEBUG]
@@ -169,4 +169,4 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    main()
