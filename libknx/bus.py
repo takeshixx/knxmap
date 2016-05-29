@@ -66,24 +66,68 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                 self.transport.close()
                 self.future.set_result(None)
         elif isinstance(knx_message, KnxTunnellingRequest):
-            # TODO: check this more central, e.g. in the KnxMessage class
-            def is_set_bit(value, pos):
-                if (value & (2 ** pos)) is not 0:
-                    return True
-                else:
-                    return False
+            knx_dest = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_destination'))
 
-            if CEMI_PRIMITIVES[knx_message.body.get('cemi').get('message_code')] == 'L_Data.con':
-                ctrl_field1 = knx_message.body.get('cemi').get('controlfield_1')
-                knx_dest = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_destination'))
+            if CEMI_PRIMITIVES[knx_message.body.get('cemi').get('message_code')] == 'L_Data.con' and \
+                    knx_message.body.get('cemi').get('tpci').get('type') == TPCI_TYPES['UCD']:
 
-                # TODO: if check is successful, add it to a global list
-                if is_set_bit(ctrl_field1, 0):
+                if knx_message.body.get('cemi').get('controlfield_1').get('confirm'):
                     LOGGER.debug('KNX device not alive: {}'.format(knx_dest))
-                    self.target_futures[knx_dest].set_result(False)
+                    if not self.target_futures[knx_dest].done():
+                        self.target_futures[knx_dest].set_result(False)
                 else:
                     LOGGER.debug('KNX device is alive: {}'.format(knx_dest))
-                    self.target_futures[knx_dest].set_result(True)
+                    if not self.target_futures[knx_dest].done():
+                        self.target_futures[knx_dest].set_result(True)
+
+            elif CEMI_PRIMITIVES[knx_message.body.get('cemi').get('message_code')] == 'L_Data.con' and \
+                    (knx_message.body.get('cemi').get('tpci').get('type') == TPCI_TYPES['NDT'] or
+                     knx_message.body.get('cemi').get('tpci').get('type') == TPCI_TYPES['NCD']):
+
+                if knx_message.body.get('cemi').get('controlfield_1').get('confirm'):
+                    LOGGER.debug('KNX device not alive: {}'.format(knx_dest))
+                    if not self.target_futures[knx_dest].done():
+                        self.target_futures[knx_dest].set_result(False)
+
+                if knx_dest in self.target_futures.keys():
+
+                    def waiter():
+                        if not self.target_futures[knx_dest].done():
+                            self.target_futures[knx_dest].set_result(False)
+
+                    self.loop.call_later(2, waiter)
+
+            elif CEMI_PRIMITIVES[knx_message.body.get('cemi').get('message_code')] == 'L_Data.ind' and \
+                    knx_message.body.get('cemi').get('tpci').get('type') == TPCI_TYPES['NDT']:
+
+                if knx_message.body.get('cemi').get('apci') == APCI_TYPES['A_DeviceDescriptor_Response']:
+                    knx_source = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_source'))
+                    if not self.target_futures[knx_source].done():
+                        self.target_futures[knx_source].set_result(True)
+
+                elif knx_message.body.get('cemi').get('apci') == APCI_TYPES['A_Authorize_Response']:
+                    knx_source = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_source'))
+
+                    LOGGER.info('AUTHORIZE_RESPONSE DATA: {}'.format(knx_message.body.get('cemi').get('data')))
+
+                    if not self.target_futures[knx_source].done():
+                        self.target_futures[knx_source].set_result(True)
+
+                elif knx_message.body.get('cemi').get('apci') == APCI_TYPES['A_PropertyValue_Response']:
+                    knx_source = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_source'))
+
+                    LOGGER.info('PROPERTY_VALUE_RESPONSE DATA: {}'.format(knx_message.body.get('cemi').get('data')))
+
+                    if not self.target_futures[knx_source].done():
+                        self.target_futures[knx_source].set_result(True)
+
+                elif knx_message.body.get('cemi').get('apci') == APCI_TYPES['A_Memory_Response']:
+                    knx_source = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_source'))
+
+                    LOGGER.info('MEMORY_RESPONSE DATA: {}'.format(knx_message.body.get('cemi').get('data')))
+
+                    if not self.target_futures[knx_source].done():
+                        self.target_futures[knx_source].set_result(True)
 
             if CEMI_PRIMITIVES[knx_message.body.get('cemi').get('message_code')] == 'L_Data.con' or \
                     CEMI_PRIMITIVES[knx_message.body.get('cemi').get('message_code')] == 'L_Data.ind':
@@ -91,6 +135,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                     communication_channel=knx_message.body.get('communication_channel_id'),
                     sequence_count=knx_message.body.get('sequence_counter'))
                 self.transport.sendto(tunnelling_ack.get_message())
+
         elif isinstance(knx_message, KnxTunnellingAck):
             pass
         elif isinstance(knx_message, KnxConnectionStateResponse):
