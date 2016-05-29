@@ -15,15 +15,12 @@ elif sys.version_info.major > 2 and \
     install_require.append('asyncio')
 
 setup(
-    name='knxmap',
+    name='KNXmap',
     version='',
     packages=['libknx'],
     install_requires=install_require,
-    extras_require = {
-        'CIDR': ['ipaddress']},
     url='https://github.com/takeshixx/knxmap',
     license='',
     author='takeshix',
     author_email='takeshix@adversec.com',
-    description='Network and bus scanner for KNX devices'
-)
+    description='Network and bus scanner for KNX devices')
