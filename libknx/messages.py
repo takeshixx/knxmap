@@ -143,6 +143,21 @@ class KnxMessage(object):
         """
         return '{0:02X}:{1:02X}:{2:02X}:{3:02X}:{4:02X}:{5:02X}'.format(*address)
 
+    def set_peer(self, peer):
+        assert isinstance(peer, tuple), ('Peer is not a tuple')
+        self.source, self.port = peer
+
+    def set_source_ip(self, address):
+        self.source = address
+
+    def set_source_port(self, port):
+        assert isinstance(port, int), ('Port is not an int')
+        self.port = port
+
+    def set_knx_source(self, address):
+        """Set the KNX source address of a KnxMessage instance."""
+        self.knx_source = self.pack_knx_address(address)
+
     def set_knx_destination(self, address):
         """Set the KNX destination address of a KnxMessage instance."""
         self.knx_destination = self.pack_knx_address(address)
@@ -153,7 +168,10 @@ class KnxMessage(object):
         return self.message if self.message else None
 
     def pack_knx_message(self):
-        message_body = self._pack_knx_body()
+        if not self.body:
+            message_body = self._pack_knx_body()
+        else:
+            message_body = self.body
         self.header['total_length'] = 6 + len(message_body) # header size is always 6
         self.message = self._pack_knx_header()
         self.message += message_body
@@ -255,112 +273,113 @@ class KnxMessage(object):
 
         return dib_supp_sv_families
 
-    def _pack_cemi(self):
-        cemi = struct.pack('!B', self.cemi_message_code) # cEMI message code
+    @staticmethod
+    def pack_cemi_cf1(confirm=False, acknowledge_req=False, priority=0x00,
+                      system_broadcast=True, repeat_flag=True, frame_type=True):
+        """Pack controlfield1 of the cEMI message.
+
+          Bit  |
+         ------+---------------------------------------------------------------
+           7   | Frame Type  - 0x0 for extended frame
+               |               0x1 for standard frame
+         ------+---------------------------------------------------------------
+           6   | Reserved
+               |
+         ------+---------------------------------------------------------------
+           5   | Repeat Flag - 0x0 repeat frame on medium in case of an error
+               |               0x1 do not repeat
+         ------+---------------------------------------------------------------
+           4   | System Broadcast - 0x0 system broadcast
+               |                    0x1 broadcast
+         ------+---------------------------------------------------------------
+           3   | Priority    - 0x0 system
+               |               0x1 normal
+         ------+               0x2 urgent
+           2   |               0x3 low
+               |
+         ------+---------------------------------------------------------------
+           1   | Acknowledge Request - 0x0 no ACK requested
+               | (L_Data.req)          0x1 ACK requested
+         ------+---------------------------------------------------------------
+           0   | Confirm      - 0x0 no error
+               | (L_Data.con) - 0x1 error
+         ------+---------------------------------------------------------------"""
+        cf = 0
+        cf |= (1 if confirm else 0) << 0
+        cf |= (1 if acknowledge_req else 0) << 1
+        cf |= priority << 2
+        cf |= (1 if system_broadcast else 0) << 4
+        cf |= (1 if repeat_flag else 0) << 5
+        cf |= 0 << 6 # reserved
+        cf |= (1 if frame_type else 0) << 7
+        return cf
+
+    @staticmethod
+    def pack_cemi_cf2(ext_frame_format=0x00, hop_count=6, address_type=False):
+        """Pack controlfield2 of the cEMI message.
+
+          Bit  |
+         ------+---------------------------------------------------------------
+           7   | Destination Address Type - 0x0 individual address
+               |                          - 0x1 group address
+         ------+---------------------------------------------------------------
+          6-4  | Hop Count (0-7)
+         ------+---------------------------------------------------------------
+          3-0  | Extended Frame Format - 0x0 standard frame
+         ------+---------------------------------------------------------------"""
+        cf = 0
+        cf |= ext_frame_format << 0
+        cf |= hop_count << 4
+        cf |= (1 if address_type else 0) << 7
+        return cf
+
+    @staticmethod
+    def unpack_cemi_cf1(data):
+        """Parse controlfield1 to a drict."""
+        cf = dict()
+        cf['confirm'] = (data >> 0) & 1
+        cf['acknowledge_req'] = (data >> 1) & 1
+        cf['priority'] = 0
+        cf['priority'] |= ((data >> 2) & 1) << 0
+        cf['priority'] |= ((data >> 3) & 1) << 1
+        cf['system_broadcast'] = (data >> 4) & 1
+        cf['repeat_flag'] = (data >> 5) & 1
+        cf['reserved'] = (data >> 6) & 1
+        cf['frame_type'] = (data >> 7) & 1
+        return cf
+
+    @staticmethod
+    def unpack_cemi_cf2(data):
+        """Parse controlfield2 to a drict."""
+        cf = dict()
+        cf['ext_frame_format'] = 0
+        cf['ext_frame_format'] |= ((data >> 0) & 1) << 0
+        cf['ext_frame_format'] |= ((data >> 1) & 1) << 1
+        cf['ext_frame_format'] |= ((data >> 2) & 1) << 2
+        cf['ext_frame_format'] |= ((data >> 3) & 1) << 3
+        cf['hop_count'] = 0
+        cf['hop_count'] |= ((data >> 4) & 1) << 0
+        cf['hop_count'] |= ((data >> 5) & 1) << 1
+        cf['hop_count'] |= ((data >> 6) & 1) << 2
+        cf['address_type'] = (data >> 7) & 1
+        return cf
+
+    def _pack_cemi(self, message_code=None):
+        message_code = message_code if message_code else self.cemi_message_code
+        cemi = struct.pack('!B', message_code) # cEMI message code
         cemi += struct.pack('!B', 0) # add information length # TODO: implement variable length if additional information is included
-
-        # See: http://www.openremote.org/display/knowledge/Common+EMI+Frame+Control+Fields
-        #  Control Field 1
-        #  Bit  |
-        # ------+---------------------------------------------------------------
-        #   7   | Frame Type  - 0x0 for extended frame
-        #       |               0x1 for standard frame
-        # ------+---------------------------------------------------------------
-        #   6   | Reserved
-        #       |
-        # ------+---------------------------------------------------------------
-        #   5   | Repeat Flag - 0x0 repeat frame on medium in case of an error
-        #       |               0x1 do not repeat
-        # ------+---------------------------------------------------------------
-        #   4   | System Broadcast - 0x0 system broadcast
-        #       |                    0x1 broadcast
-        # ------+---------------------------------------------------------------
-        #   3   | Priority    - 0x0 system
-        #       |               0x1 normal
-        # ------+               0x2 urgent
-        #   2   |               0x3 low
-        #       |
-        # ------+---------------------------------------------------------------
-        #   1   | Acknowledge Request - 0x0 no ACK requestedhttp://www.weinzierl.de/images/development/images/development/net_n_node/1.png
-        #       | (L_Data.req)          0x1 ACK requested
-        # ------+---------------------------------------------------------------
-        #   0   | Confirm      - 0x0 no error
-        #       | (L_Data.con) - 0x1 error
-        # ------+---------------------------------------------------------------
-        #
-        #
-        # Control Field 2
-        #
-        #  Bit  |
-        # ------+---------------------------------------------------------------
-        #   7   | Destination Address Type - 0x0 individual address
-        #       |                          - 0x1 group address
-        # ------+---------------------------------------------------------------
-        #  6-4  | Hop Count (0-7)
-        # ------+---------------------------------------------------------------
-        #  3-0  | Extended Frame Format - 0x0 standard frame
-        # ------+---------------------------------------------------------------
-
-
-        def set_bit(value, bit):
-            return value | (1 << bit)
-
-        def clear_bit(value, bit):
-            return value & ~(1 << bit)
-
-        def is_set_bit(value, pos):
-            if (value&(2**pos)) is not 0:
-                return True
-            else:
-                return False
-
-        def gen_cf1():
-            cf = 0
-            cf = clear_bit(cf, 0) # confirm (no error)
-            cf = clear_bit(cf, 1) # acknowledge request (no ACK)
-            cf = clear_bit(cf, 2) # system
-            cf = clear_bit(cf, 3) # system
-            cf = set_bit(cf, 4) # broadcast
-            cf = set_bit(cf, 5) # repeat if error
-            cf = clear_bit(cf, 6) # reserved
-            cf = set_bit(cf, 7) # standard frame
-            return cf
-
-        def gen_cf2():
-            cf = 0
-            cf = clear_bit(cf, 0) # standard frame
-            cf = clear_bit(cf, 1)
-            cf = clear_bit(cf, 2)
-            cf = clear_bit(cf, 3)
-            cf = clear_bit(cf, 4) # hop count (6)
-            cf = set_bit(cf, 5)
-            cf = set_bit(cf, 6)
-            cf = clear_bit(cf, 7) # address type (group address)
-            return cf
-
-        cemi += struct.pack('!B', gen_cf1()) # controlfield 1
-        cemi += struct.pack('!B', gen_cf2()) # controlfield 2
+        cemi += struct.pack('!B', self.pack_cemi_cf1()) # controlfield 1
+        cemi += struct.pack('!B', self.pack_cemi_cf2()) # controlfield 2
         cemi += struct.pack('!H', self.knx_source) # source address (KNX address)
         cemi += struct.pack('!H', self.knx_destination) # KNX destination address (either group or physical)
-        cemi += struct.pack('!B', self.cemi_ndpu_len) # Data length
-        if self.cemi_ndpu_len > 0:
-            #cemi += struct.pack('!H', 0x0081) # Application Protocol Data Unit (APDU) - the actual payload (TPCI, APCI)
-            cemi += struct.pack('!H', 0x0300)  # Application Protocol Data Unit (APDU) - the actual payload (TPCI, APCI)
         return cemi
 
     def _unpack_cemi(self, message):
         cemi = dict()
         cemi['message_code'] = self._unpack_stream('!B', message)
         cemi['information_length'] = self._unpack_stream('!B', message)
-        if cemi['information_length'] is 0:
-            cemi['controlfield_1'] = self._unpack_stream('!B', message)
-            cemi['controlfield_2'] = self._unpack_stream('!B', message)
-            cemi['knx_source'] = self._unpack_stream('!H', message)
-            cemi['knx_destination'] = self._unpack_stream('!H', message)
-            cemi['npdu'] = self._unpack_stream('!B', message)
-            cemi['tcpi'] = self._unpack_stream('!B', message)
-            cemi['apci'] = self._unpack_stream('!B', message)
-        else:
+
+        if cemi['information_length'] is not 0:
             cemi['additional_information'] = {}
             cemi['additional_information']['busmonitor_info'] = self._unpack_stream('!B', message)
             cemi['additional_information']['busmonitor_info_length'] = self._unpack_stream('!B', message)
@@ -369,6 +388,68 @@ class KnxMessage(object):
             cemi['additional_information']['extended_relative_timestamp'] = self._unpack_stream('!B', message)
             cemi['additional_information']['extended_relative_timestamp'] = self._unpack_stream('!I', message)
             cemi['raw_frame'] = message.read()
+
+        cemi['controlfield_1'] = self.unpack_cemi_cf1(self._unpack_stream('!B', message))
+        cemi['controlfield_2'] = self.unpack_cemi_cf2(self._unpack_stream('!B', message))
+        cemi['knx_source'] = self._unpack_stream('!H', message)
+        cemi['knx_destination'] = self._unpack_stream('!H', message)
+        cemi['npdu_len'] = self._unpack_stream('!B', message)
+
+        tpci_unpacked = dict()
+        tpci = self._unpack_stream('!{}s'.format(cemi['npdu_len'] + 1), message)
+
+        tpci_unpacked['tpci_type'] = 0
+        tpci_unpacked['tpci_type'] |= ((tpci[0] >> 6) & 1) << 0
+        tpci_unpacked['tpci_type'] |= ((tpci[0] >> 7) & 1) << 1
+        tpci_unpacked['sequence'] = 0
+        tpci_unpacked['sequence'] |= ((tpci[0] >> 2) & 1) << 0
+        tpci_unpacked['sequence'] |= ((tpci[0] >> 3) & 1) << 1
+        tpci_unpacked['sequence'] |= ((tpci[0] >> 4) & 1) << 2
+        tpci_unpacked['sequence'] |= ((tpci[0] >> 5) & 1) << 3
+
+        cemi['tpci'] = dict()
+        cemi['tpci']['type'] = tpci_unpacked['tpci_type']
+        cemi['tpci']['sequence'] = tpci_unpacked['sequence']
+
+        if cemi['npdu_len'] > 0:
+            tpci_unpacked['apci'] = 0
+            tpci_unpacked['apci'] |= ((tpci[1] >> 6) & 1) << 0
+            tpci_unpacked['apci'] |= ((tpci[1] >> 7) & 1) << 1
+            tpci_unpacked['apci'] |= ((tpci[0] >> 0) & 1) << 2
+            tpci_unpacked['apci'] |= ((tpci[0] >> 1) & 1) << 3
+
+            if tpci_unpacked['apci'] in APCI_TYPES.values():
+                tpci_unpacked['apci_data'] = 0
+                tpci_unpacked['apci_data'] |= ((tpci[1] >> 0) & 1) << 0
+                tpci_unpacked['apci_data'] |= ((tpci[1] >> 1) & 1) << 1
+                tpci_unpacked['apci_data'] |= ((tpci[1] >> 2) & 1) << 2
+                tpci_unpacked['apci_data'] |= ((tpci[1] >> 3) & 1) << 3
+                tpci_unpacked['apci_data'] |= ((tpci[1] >> 4) & 1) << 4
+                tpci_unpacked['apci_data'] |= ((tpci[1] >> 5) & 1) << 5
+            else:
+                tpci_unpacked['apci'] = tpci_unpacked['apci'] << 2
+                tpci_unpacked['apci'] |= ((tpci[1] >> 4) & 1) << 0
+                tpci_unpacked['apci'] |= ((tpci[1] >> 5) & 1) << 1
+
+                if tpci_unpacked['apci'] in APCI_TYPES.values():
+                    tpci_unpacked['apci_data'] = 0
+                    tpci_unpacked['apci_data'] |= ((tpci[1] >> 0) & 1) << 0
+                    tpci_unpacked['apci_data'] |= ((tpci[1] >> 1) & 1) << 1
+                    tpci_unpacked['apci_data'] |= ((tpci[1] >> 2) & 1) << 2
+                    tpci_unpacked['apci_data'] |= ((tpci[1] >> 3) & 1) << 3
+                else:
+                    tpci_unpacked['apci'] = tpci_unpacked['apci'] << 4
+                    tpci_unpacked['apci'] |= ((tpci[1] >> 0) & 1) << 0
+                    tpci_unpacked['apci'] |= ((tpci[1] >> 1) & 1) << 1
+                    tpci_unpacked['apci'] |= ((tpci[1] >> 2) & 1) << 2
+                    tpci_unpacked['apci'] |= ((tpci[1] >> 3) & 1) << 3
+
+            cemi['apci'] = tpci_unpacked['apci']
+            cemi['apci_data'] = tpci_unpacked.get('apci_data')
+            cemi['data'] = tpci[2:]
+
+        # TODO: if there is more data, read it now
+        # TODO: read cemi['npdu_len']-1 bytes
         return cemi
 
 
@@ -379,7 +460,7 @@ class KnxSearchRequest(KnxMessage):
         if message:
             self.unpack_knx_message(message)
         else:
-            self.header['service_type'] = 0x0201
+            self.header['service_type'] = KNX_MESSAGE_TYPES.get('SEARCH_REQUEST')
             try:
                 self.source, self.port = sockname
                 self.pack_knx_message()
@@ -406,7 +487,7 @@ class KnxSearchResponse(KnxMessage):
         if message:
             self.unpack_knx_message(message)
         else:
-            self.header['service_type'] = 0x0202
+            self.header['service_type'] = KNX_MESSAGE_TYPES.get('SEARCH_RESPONSE')
             self.pack_knx_message()
 
     def _pack_knx_body(self):
@@ -429,7 +510,7 @@ class KnxDescriptionRequest(KnxMessage):
         if message:
             self.unpack_knx_message(message)
         else:
-            self.header['service_type'] = 0x0203
+            self.header['service_type'] = KNX_MESSAGE_TYPES.get('DESCRIPTION_REQUEST')
             try:
                 self.source, self.port = sockname
                 self.pack_knx_message()
@@ -456,7 +537,7 @@ class KnxDescriptionResponse(KnxMessage):
         if message:
             self.unpack_knx_message(message)
         else:
-            self.header['service_type'] = 0x0204
+            self.header['service_type'] = KNX_MESSAGE_TYPES.get('DESCRIPTION_RESPONSE')
             self.pack_knx_message()
 
     def _pack_knx_body(self):
@@ -486,7 +567,7 @@ class KnxConnectRequest(KnxMessage):
         if message:
             self.unpack_knx_message(message)
         else:
-            self.header['service_type'] = 0x0205
+            self.header['service_type'] = KNX_MESSAGE_TYPES.get('CONNECT_REQUEST')
             self.layer_type = layer_type
             try:
                 self.source, self.port = sockname
@@ -533,7 +614,7 @@ class KnxConnectResponse(KnxMessage):
         if message:
             self.unpack_knx_message(message)
         else:
-            self.header['service_type'] = 0x0206
+            self.header['service_type'] = KNX_MESSAGE_TYPES.get('CONNECT_RESPONSE')
             self.pack_knx_message()
 
     def _pack_knx_body(self):
@@ -570,17 +651,16 @@ class KnxTunnellingRequest(KnxMessage):
         if message:
             self.unpack_knx_message(message)
         else:
-            self.header['service_type'] = 0x0420
+            self.header['service_type'] = KNX_MESSAGE_TYPES.get('TUNNELLING_REQUEST')
             self.communication_channel = communication_channel
             self.sequence_count = sequence_count
             self.cemi_message_code = message_code
             if knx_source:
                 self.knx_source = self.pack_knx_address(knx_source)
-            else:
-                self.knx_source = self.pack_knx_address('0.0.0') # TODO: only for dev, will be removed
-
             if knx_destination:
                 self.set_knx_destination(knx_destination)
+
+            self.cemi_npdu_len = 0
 
             try:
                 self.source, self.port = sockname
@@ -589,13 +669,16 @@ class KnxTunnellingRequest(KnxMessage):
                 self.source = None
                 self.port = None
 
-    def _pack_knx_body(self):
+    def _pack_knx_body(self, cemi=None):
         self.body = struct.pack('!B', 4) # structure_length
         self.body += struct.pack('!B', self.communication_channel) # channel id
         self.body += struct.pack('!B', self.sequence_count) # sequence counter
         self.body += struct.pack('!B', 0) # reserved
         # cEMI
-        self.body += self._pack_cemi()
+        if cemi:
+            self.body += cemi
+        else:
+            self.body += self._pack_cemi()
         return self.body
 
     def _unpack_knx_body(self, message):
@@ -610,6 +693,105 @@ class KnxTunnellingRequest(KnxMessage):
         except Exception as e:
             LOGGER.exception(e)
 
+    def unnumbered_control_data(self):
+        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 0) # Data length
+        npdu = TPCI_TYPES.get('UCD') << 14
+        cemi += struct.pack('!H', npdu)
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def numbered_control_data(self, sequence=0):
+        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 0)  # Data length
+        npdu = TPCI_TYPES.get('NCD') << 14
+        npdu |= sequence << 10
+        cemi += struct.pack('!H', npdu)
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def a_device_descriptor_read(self, sequence=0):
+        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 1) # Data length
+        npdu = TPCI_TYPES.get('NDT') << 14
+        npdu |= sequence << 10
+        npdu |= APCI_TYPES['A_DeviceDescriptor_Read'] << 0
+        cemi += struct.pack('!H', npdu)
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def a_authorize_request(self, sequence=0, key=0xffffffff):
+        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 6)  # Data length
+        npdu = TPCI_TYPES.get('NDT') << 14
+        npdu |= sequence << 10
+        npdu |= APCI_TYPES['A_Authorize_Request'] << 0
+        cemi += struct.pack('!H', npdu)
+        cemi += struct.pack('!B', 0) # reserved
+        cemi += struct.pack('!I', key) # key
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def a_property_value_read(self, sequence=0, object_index=0, property_id=0x0f,
+                              num_elements=1, start_index=1):
+        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 5) # Data length
+        npdu = TPCI_TYPES.get('NDT') << 14
+        npdu |= sequence << 10
+        npdu |= APCI_TYPES['A_PropertyValue_Read'] << 0
+        cemi += struct.pack('!H', npdu)
+
+        # object index: 0x00, property id: 0x0f ->
+        # object index: 0x00, property id: 0x0b -> serial number
+        # object index: 0x03, property id: 0x0d -> application programm, ABB A021 v2.0, 0002a02120
+        # object index: 0x03, property id: 0x06 -> 0x01
+        # object index: 0x04, property id: 0x0d -> -
+        # object index: 0x04, property id: 0x06 -> -
+
+        cemi += struct.pack('!B', object_index) # object index
+        cemi += struct.pack('!B', property_id) # property id
+        count_index = num_elements << 12
+        count_index |= start_index << 0
+        cemi += struct.pack('!H', count_index) # number of elements + start index
+
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def a_adc_read(self, sequence=0):
+        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 2) # Data length
+        npdu = TPCI_TYPES.get('NDT') << 14
+        npdu |= sequence << 10
+        npdu |= APCI_TYPES['A_ADC_Read'] << 0
+
+        npdu |= 1 << 0 # channel nr
+
+        cemi += struct.pack('!H', npdu)
+        cemi += struct.pack('!B', 0x08)  # data
+
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def a_memory_read(self, sequence=0, memory_address=0x0060, read_count=1):
+        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 3) # Data length
+        npdu = TPCI_TYPES.get('NDT') << 14
+        npdu |= sequence << 10
+        npdu |= APCI_TYPES['A_Memory_Read'] << 4
+        npdu |= read_count << 0 # number of octets to be read/write
+        cemi += struct.pack('!H', npdu)
+
+        # 0x0060 -> 0x00
+        # 0xb6ec -> 0x01
+        # 0xb6ed -> 0x01
+        # 0xb6ea -> 0x01
+        # 0xb6eb -> 0x01
+
+        cemi += struct.pack('!H', memory_address)  # memory address
+
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
 
 class KnxTunnellingAck(KnxMessage):
 
@@ -618,7 +800,7 @@ class KnxTunnellingAck(KnxMessage):
         if message:
             self.unpack_knx_message(message)
         else:
-            self.header['service_type'] = 0x0421
+            self.header['service_type'] = KNX_MESSAGE_TYPES.get('TUNNELLING_ACK')
             self.communication_channel = communication_channel
             self.sequence_count = sequence_count
             self.pack_knx_message()
@@ -649,7 +831,7 @@ class KnxConnectionStateRequest(KnxMessage):
         if message:
             self.unpack_knx_message(message)
         else:
-            self.header['service_type'] = 0x0207
+            self.header['service_type'] = KNX_MESSAGE_TYPES.get('CONNECTIONSTATE_REQUEST')
             self.communication_channel = communication_channel
             try:
                 self.source, self.port = sockname
@@ -684,7 +866,7 @@ class KnxConnectionStateResponse(KnxMessage):
         if message:
             self.unpack_knx_message(message)
         else:
-            self.header['service_type'] = 0x0208
+            self.header['service_type'] = KNX_MESSAGE_TYPES.get('CONNECTIONSTATE_RESPONSE')
             self.communication_channel = communication_channel
             self.pack_knx_message()
 
@@ -711,7 +893,7 @@ class KnxDisconnectRequest(KnxMessage):
         if message:
             self.unpack_knx_message(message)
         else:
-            self.header['service_type'] = 0x0209
+            self.header['service_type'] = KNX_MESSAGE_TYPES.get('DISCONNECT_REQUEST')
             self.communication_channel = communication_channel
             try:
                 self.source, self.port = sockname
@@ -746,7 +928,7 @@ class KnxDisconnectResponse(KnxMessage):
         if message:
             self.unpack_knx_message(message)
         else:
-            self.header['service_type'] = 0x020a
+            self.header['service_type'] = KNX_MESSAGE_TYPES.get('DISCONNECT_RESPONSE')
             self.communication_channel = communication_channel
             self.pack_knx_message()
 
@@ -768,6 +950,84 @@ class KnxDisconnectResponse(KnxMessage):
 #       ROUTING_INDICATION
 #       ROUTING_LOST_MESSAGE
 
-# TODO: implement device configuration requests
-#       DEVICE_CONFIGURATION_REQUEST
-#       DEVICE_CONFIGURATION_ACK
+
+class KnxDeviceConfigurationRequest(KnxMessage):
+
+    def __init__(self, message=None, sockname=None, communication_channel=None,
+                 knx_source=None, knx_destination=None, sequence_count=0, message_code=0x11,
+                 cemi_ndpu_len=1):
+        super(KnxDeviceConfigurationRequest, self).__init__()
+        if message:
+            self.unpack_knx_message(message)
+        else:
+            self.header['service_type'] = KNX_MESSAGE_TYPES.get('DEVICE_CONFIGURATION_REQUEST')
+            self.communication_channel = communication_channel
+            self.sequence_count = sequence_count
+            self.cemi_message_code = message_code
+            if knx_source:
+                self.knx_source = self.pack_knx_address(knx_source)
+            if knx_destination:
+                self.set_knx_destination(knx_destination)
+
+            self.cemi_npdu_len = 0
+
+            try:
+                self.source, self.port = sockname
+                self.pack_knx_message()
+            except TypeError:
+                self.source = None
+                self.port = None
+
+    def _pack_knx_body(self, cemi=None):
+        self.body = struct.pack('!B', 4) # structure_length
+        self.body += struct.pack('!B', self.communication_channel) # channel id
+        self.body += struct.pack('!B', self.sequence_count) # sequence counter
+        self.body += struct.pack('!B', 0) # reserved
+        # cEMI
+        if cemi:
+            self.body += cemi
+        else:
+            self.body += self._pack_cemi()
+        return self.body
+
+    def _unpack_knx_body(self, message):
+        try:
+            message = io.BytesIO(message)
+            self.body['structure_length'] = self._unpack_stream('!B', message)
+            self.body['communication_channel_id'] = self._unpack_stream('!B', message)
+            self.body['sequence_counter'] = self._unpack_stream('!B', message)
+            self.body['reserved'] = self._unpack_stream('!B', message)
+            # cEMI
+            self.body['cemi'] = self._unpack_cemi(message)
+        except Exception as e:
+            LOGGER.exception(e)
+
+
+class KnxDeviceConfigurationAck(KnxMessage):
+
+    def __init__(self, message=None, communication_channel=None, sequence_count=0):
+        super(KnxDeviceConfigurationAck, self).__init__()
+        if message:
+            self.unpack_knx_message(message)
+        else:
+            self.header['service_type'] = KNX_MESSAGE_TYPES.get('DEVICE_CONFIGURATION_RESPONSE')
+            self.communication_channel = communication_channel
+            self.sequence_count = sequence_count
+            self.pack_knx_message()
+
+    def _pack_knx_body(self):
+        self.body = struct.pack('!B', 4) # structure_length
+        self.body += struct.pack('!B', self.communication_channel) # channel id
+        self.body += struct.pack('!B', self.sequence_count) # sequence counter
+        self.body += struct.pack('!B', 0) # status
+        return self.body
+
+    def _unpack_knx_body(self, message):
+        try:
+            message = io.BytesIO(message)
+            self.body['structure_length'] = self._unpack_stream('!B', message)
+            self.body['communication_channel_id'] = self._unpack_stream('!B', message)
+            self.body['sequence_counter'] = self._unpack_stream('!B', message)
+            self.body['status'] = self._unpack_stream('!B', message)
+        except Exception as e:
+            LOGGER.exception(e)
