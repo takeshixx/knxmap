@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
+import sys
+import os
 import argparse
 import logging
-import os
-import socket
-import sys
+import ipaddress
 
 import libknx
 
@@ -13,27 +13,18 @@ if sys.version_info.major < 3 or \
     sys.version_info.minor < 3):
     print('At least Python version 3.3 is required to run this script!')
     sys.exit(1)
-
 try:
-    # Python 3.4 ships with asyncio in the standard libraries. Users with Python 3.3
+    # Python 3.4 ships with asyncio in the standard libraries. Users of Python 3.3
     # need to install it, e.g.: pip install asyncio
     import asyncio
 except ImportError:
     print('Please install the asyncio module!')
     sys.exit(1)
 
-# Check if the ipaddress module is available for better target parsing support.
-MOD_IPADDRESS = False
-try:
-    import ipaddress
-    MOD_IPADDRESS = True
-except ImportError:
-    pass
-
 LOGGER = logging.getLogger(__name__)
 
 # TODO: create proper arguments
-# TODO: add subcommands for scanning modes
+# TODO: add subcommands for scanning modes?
 ARGS = argparse.ArgumentParser(description="KNXnet/IP Scanner")
 ARGS.add_argument(
     'targets', nargs='*',
@@ -57,6 +48,9 @@ ARGS.add_argument(
     '--bus', action='store_true', dest='bus_mode',
     default=False, help='Scan bus on KNXnet/IP gateway')
 ARGS.add_argument(
+    '--bus-targets', action='store', dest='bus_targets',
+    default=None, help='Bus target range')
+ARGS.add_argument(
     '--bus-monitor', action='store_true', dest='bus_monitor_mode',
     default=False, help='Monitor all bus messages via KNXnet/IP gateway')
 ARGS.add_argument(
@@ -70,26 +64,24 @@ ARGS.add_argument(
     default=2, help='Only log errors')
 
 
-class Targets():
-    """A helper class that expands provided target definitions to a proper list."""
-    def __init__(self, targets=set(), ports=None):
+class Targets:
+    """A helper class that expands provided target definitions to a list of tuples."""
+    def __init__(self, targets=set(), ports=3671):
         self.targets = set()
         self.ports = set()
-
-        if ports:
-            if isinstance(ports, list):
-                for p in ports:
-                    self.ports.add(p)
-            else:
-                self.ports.add(ports)
-
-        if MOD_IPADDRESS:
-            self._parse_ipaddress(targets)
+        if isinstance(ports, list):
+            for p in ports:
+                self.ports.add(p)
+        elif isinstance(ports, int):
+            self.ports.add(ports)
         else:
-            LOGGER.error('ipaddress module is not available! CIDR notifications will be ignored.')
+            self.ports.add(3671)
+
+        if isinstance(targets, set) or \
+            isinstance(targets, list):
             self._parse(targets)
 
-    def _parse_ipaddress(self, targets):
+    def _parse(self, targets):
         """Parse all targets with ipaddress module (with CIDR notation support)."""
         for target in targets:
             try:
@@ -105,18 +97,70 @@ class Targets():
                 for port in self.ports:
                     self.targets.add((str(_target), port))
 
-    def _parse(self, targets):
-        """Parse targets without ipaddress module. This provides a simple interface
-        that does not add the ipaddress module as dependency."""
-        for target in targets:
-            try:
-                socket.inet_aton(target)
-            except socket.error:
-                LOGGER.error('Invalid target definition, ignoring it: {}'.format(target))
-                continue
 
-            for port in self.ports:
-                self.targets.add((target, port))
+class KnxTargets:
+    """A helper class that expands knx bus targets to lists."""
+    def __init__(self, targets):
+        if not targets:
+            self.targets = set()
+        else:
+            assert isinstance(targets, str)
+            assert '-' in targets
+            assert targets.count('-') < 2
+            # TODO: also parse dashes in octets
+            try:
+                f, t = targets.split('-')
+            except ValueError:
+                return
+            if not self.is_valid_physical_address(f) or \
+                not self.is_valid_physical_address(t):
+                return
+            # TODO: make it group address aware
+            # TODO: make sure t is higher than f
+            self.targets = self.expand_targets(f, t)
+
+    @staticmethod
+    def expand_targets(f, t):
+        targets = set()
+        for i in range(int(f.split('.')[0]),
+                       int(t.split('.')[0]) if int(t.split('.')[0]) > int(f.split('.')[0]) else (int(t.split('.')[0]) + 1)):
+            for j in range(int(f.split('.')[1]),
+                           int(t.split('.')[1]) if int(t.split('.')[1]) > int(f.split('.')[1]) else (int(t.split('.')[1]) + 1)):
+                for g in range(int(f.split('.')[2]),
+                               int(t.split('.')[2]) if int(t.split('.')[2]) > int(f.split('.')[2]) else (int(t.split('.')[2]) + 1)):
+                    targets.add('{}.{}.{}'.format(i, j, g))
+        return targets
+
+    @staticmethod
+    def is_valid_physical_address(address):
+        assert isinstance(address, str)
+        try:
+            parts = [int(i) for i in address.split('.')]
+        except ValueError:
+            return False
+        if len(parts) is not 3:
+            return False
+        if (parts[0] < 1 or parts[0] > 15) or (parts[1] < 0 or parts[1] > 15):
+            return False
+        if parts[2] < 0 or parts[2] > 255:
+            return False
+        return True
+
+    @staticmethod
+    def is_valid_group_address(address):
+        assert isinstance(address, str)
+        try:
+            parts = [int(i) for i in address.split('/')]
+        except ValueError:
+            return False
+        if len(parts) < 2 or len(parts) > 3:
+            return False
+        if (parts[0] < 0 or parts[0] > 15) or (parts[1] < 0 or parts[1] > 15):
+            return False
+        if len(parts) is 3:
+            if parts[2] < 0 or parts[2] > 255:
+                return False
+        return True
 
 
 def main():
@@ -126,22 +170,19 @@ def main():
         sys.exit()
 
     targets = Targets(args.targets, args.port)
+    bus_targets = KnxTargets(args.bus_targets)
     levels = [logging.ERROR, logging.WARN, logging.INFO, logging.DEBUG]
-    if args.level > 2:
-        format = '[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s'
-    else:
-        format = '%(message)s'
+    format = '[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s' if args.level > 2 else '%(message)s'
     logging.basicConfig(level=levels[min(args.level, len(levels)-1)], format=format)
-
     loop = asyncio.get_event_loop()
 
     if args.search_mode:
-        if args.iface:
-            if os.geteuid() != 0:
-                LOGGER.error('-i/--interface option requires superuser privileges')
-                sys.exit(1)
-        else:
+        if not args.iface:
             LOGGER.error('--search option requires -i/--interface argument')
+            sys.exit(1)
+
+        if os.geteuid() != 0:
+            LOGGER.error('-i/--interface option requires superuser privileges')
             sys.exit(1)
     else:
         LOGGER.info('Scanning {} target(s)'.format(len(targets.targets)))
@@ -153,6 +194,7 @@ def main():
             search_mode=args.search_mode,
             search_timeout=args.search_timeout,
             bus_mode=args.bus_mode,
+            bus_targets=bus_targets,
             bus_monitor_mode=args.bus_monitor_mode,
             group_monitor_mode=args.group_monitor_mode,
             iface=args.iface))
