@@ -101,8 +101,9 @@ class Targets:
 class KnxTargets:
     """A helper class that expands knx bus targets to lists."""
     def __init__(self, targets):
+        self.targets = set()
         if not targets:
-            self.targets = set()
+            return
         else:
             assert isinstance(targets, str)
             assert '-' in targets
@@ -113,11 +114,14 @@ class KnxTargets:
             except ValueError:
                 return
             if not self.is_valid_physical_address(f) or \
-                not self.is_valid_physical_address(t):
-                return
-            # TODO: make it group address aware
-            # TODO: make sure t is higher than f
-            self.targets = self.expand_targets(f, t)
+                    not self.is_valid_physical_address(t):
+                LOGGER.error('Invalid physical address')
+                # TODO: make it group address aware
+            elif self.physical_address_to_int(t) <= \
+                    self.physical_address_to_int(f):
+                LOGGER.error('From should be smaller then To')
+            else:
+                self.targets = self.expand_targets(f, t)
 
     @staticmethod
     def expand_targets(f, t):
@@ -130,6 +134,11 @@ class KnxTargets:
                                int(t.split('.')[2]) if int(t.split('.')[2]) > int(f.split('.')[2]) else (int(t.split('.')[2]) + 1)):
                     targets.add('{}.{}.{}'.format(i, j, g))
         return targets
+
+    @staticmethod
+    def physical_address_to_int(address):
+        parts = address.split('.')
+        return (int(parts[0]) << 12) + (int(parts[1]) << 8) + (int(parts[2]))
 
     @staticmethod
     def is_valid_physical_address(address):
