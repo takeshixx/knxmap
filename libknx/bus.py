@@ -102,21 +102,29 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
 
                 if knx_message.body.get('cemi').get('apci') == APCI_TYPES['A_DeviceDescriptor_Response']:
                     knx_source = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_source'))
+
+                    # dev
+                    if not knx_source in self.target_futures:
+                        LOGGER.info('KNX source {} is not in target_futures'.format(knx_source))
+                        LOGGER.info(knx_message.body)
+
                     if not self.target_futures[knx_source].done():
                         self.target_futures[knx_source].set_result(True)
 
                 elif knx_message.body.get('cemi').get('apci') == APCI_TYPES['A_Authorize_Response']:
                     knx_source = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_source'))
 
-                    LOGGER.info('AUTHORIZE_RESPONSE DATA: {}'.format(knx_message.body.get('cemi').get('data')))
+                    LOGGER.info('{}: AUTHORIZE_RESPONSE DATA: {}'.format(knx_source, knx_message.body.get('cemi').get('data')))
 
                     if not self.target_futures[knx_source].done():
                         self.target_futures[knx_source].set_result(True)
 
                 elif knx_message.body.get('cemi').get('apci') == APCI_TYPES['A_PropertyValue_Response']:
                     knx_source = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_source'))
+                    knx_dest = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_destination'))
 
-                    LOGGER.info('PROPERTY_VALUE_RESPONSE DATA: {}'.format(knx_message.body.get('cemi').get('data')))
+                    LOGGER.info('{}/{}/{}: PROPERTY_VALUE_RESPONSE DATA: {}'.format(
+                        self.peername[0], knx_source, knx_dest, knx_message.body.get('cemi').get('data')))
 
                     if not self.target_futures[knx_source].done():
                         self.target_futures[knx_source].set_result(True)
@@ -124,7 +132,13 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                 elif knx_message.body.get('cemi').get('apci') == APCI_TYPES['A_Memory_Response']:
                     knx_source = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_source'))
 
-                    LOGGER.info('MEMORY_RESPONSE DATA: {}'.format(knx_message.body.get('cemi').get('data')))
+                    LOGGER.info('{}/{}: MEMORY_RESPONSE DATA: {}'.format(
+                        self.peername[0], knx_source, knx_message.body.get('cemi').get('data')))
+
+                    # dev
+                    if not knx_source in self.target_futures:
+                        LOGGER.info('KNX source {} is not in target_futures'.format(knx_source))
+                        LOGGER.info(knx_message.body)
 
                     if not self.target_futures[knx_source].done():
                         self.target_futures[knx_source].set_result(True)

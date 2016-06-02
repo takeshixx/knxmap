@@ -37,70 +37,58 @@ KnxTargetReport = collections.namedtuple(
     'bus_devices'])
 
 
-class KnxScanner():
+class KnxScanner:
     """The main scanner instance that takes care of scheduling workers for the targets."""
-    def __init__(self, targets=None, max_workers=100, loop=None, ):
+    def __init__(self, targets=None, bus_targets=None, max_workers=100, loop=None, ):
         self.loop = loop or asyncio.get_event_loop()
         self.max_workers = max_workers
         # the Queue contains all targets
         self.q = Queue(loop=self.loop)
-
-        self.gateway_queue = Queue(loop=self.loop)
-        self.bus_queue = Queue(loop=self.loop)
-        self.bus_protocol = None
-
-        # DEV: add dev targets
-        self.dev_add_knx_targets(
-            self.dev_knx_address_range())
+        self.bus_queues = dict()
+        self.bus_q = Queue(loop=self.loop)
+        self._bus_targets = bus_targets
+        self.bus_protocols = list()
 
         if targets:
-            self.targets = targets
+            self.set_targets(targets)
         else:
             self.targets = set()
+
+        if bus_targets:
+            self.set_bus_targets(bus_targets)
+        else:
+            self.bus_targets = set()
+
         self.alive_targets = set()
         self.knx_gateways = list()
         self.bus_devices = set()
         self.bus_devices_description = set()
 
-        for target in targets:
-            self.add_target(target)
-
         # save some timing information
         self.t0 = time.time()
         self.t1 = None
 
-    @staticmethod
-    def dev_knx_address_range():
-        """A helper function that returns bus targets.
-        Either return t (complete KNXnet/IP address space) or any list of targets."""
-        t = []
-        for i in [0, 1]:
-            for ii in [0, 1]:
-                for iii in range(1, 256):
-                    t.append('{}.{}.{}'.format(i, ii, iii))
-
-        for i in [15]:
-            for ii in [15]:
-                for iii in range(1, 256):
-                    t.append('{}.{}.{}'.format(i, ii, iii))
-
-        #t = ['15.15.255']
-        t = ['1.1.1']
-        #t = ['1.1.5']
-        return t
-
-    def dev_add_knx_targets(self, targets):
-        for t in targets:
-            self.bus_queue.put_nowait(t)
-
-    def dev_get_bus_queue(self):
-        q = Queue(loop=self.loop)
-        for t in self.dev_knx_address_range():
-            q.put_nowait(t)
-        return q
+    def set_targets(self, targets):
+        #assert isinstance(targets, set)
+        self.targets = targets
+        for target in self.targets:
+            self.add_target(target)
 
     def add_target(self, target):
         self.q.put_nowait(target)
+
+    def add_bus_queue(self, gateway):
+        self.bus_queues[gateway] = Queue(loop=self.loop)
+        for target in self._bus_targets:
+            self.bus_queues[gateway].put_nowait(target)
+
+    def set_bus_targets(self, targets):
+        self.bus_targets = targets
+        for target in self.bus_targets:
+            self.add_bus_target(target)
+
+    def add_bus_target(self, target):
+        self.bus_q.put_nowait(target)
 
     @asyncio.coroutine
     def knx_bus_worker(self, transport, protocol, queue):
@@ -108,7 +96,7 @@ class KnxScanner():
         try:
             while True:
                 target = queue.get_nowait()
-                LOGGER.debug('BUS: target: {}'.format(target))
+                LOGGER.info('BUS: target: {}'.format(target))
                 if not protocol.tunnel_established:
                     LOGGER.error('Tunnel is not open!')
                     return
@@ -219,7 +207,7 @@ class KnxScanner():
                         knx_destination=target)
                     tunnel_request.set_peer(transport.get_extra_info('sockname'))
                     #tunnel_request.a_property_value_read(sequence=2, property_id=CEMI_PROPERTY_IDS.get('PID_MANUFACTURE_DATA'))
-                    tunnel_request.a_property_value_read(sequence=2, object_index=3, property_id=0xd)
+                    tunnel_request.a_property_value_read(sequence=2, object_index=0, property_id=PARAMETER_OBJECTS.get('PID_CURRENT_IP_ADDRESS'))
                     transport.sendto(tunnel_request.get_message())
 
                     alive = yield from target_future
@@ -247,46 +235,46 @@ class KnxScanner():
                     else:
                         protocol.sequence_count += 1
 
-                    sequence=3
-                    for b in range(0xff):
-                        target_future = asyncio.Future()
-                        protocol.target_futures[target] = target_future
-                        tunnel_request = KnxTunnellingRequest(
-                            communication_channel=protocol.communication_channel,
-                            sequence_count=protocol.sequence_count,
-                            knx_source=protocol.knx_source_address,
-                            knx_destination=target)
-                        tunnel_request.set_peer(transport.get_extra_info('sockname'))
-                        tunnel_request.a_memory_read(sequence=sequence, memory_address=0x0060, read_count=3)
-                        transport.sendto(tunnel_request.get_message())
-
-                        alive = yield from target_future
-
-                        if protocol.sequence_count == 255:
-                            protocol.sequence_count = 0
-                        else:
-                            protocol.sequence_count += 1
-
-                        target_future = asyncio.Future()
-                        protocol.target_futures[target] = target_future
-                        tunnel_request = KnxTunnellingRequest(
-                            communication_channel=protocol.communication_channel,
-                            sequence_count=protocol.sequence_count,
-                            knx_source=protocol.knx_source_address,
-                            knx_destination=target)
-                        tunnel_request.set_peer(transport.get_extra_info('sockname'))
-                        tunnel_request.numbered_control_data(sequence=sequence)
-                        transport.sendto(tunnel_request.get_message())
-
-                        alive = yield from target_future
-
-                        if protocol.sequence_count == 255:
-                            protocol.sequence_count = 0
-                        else:
-                            protocol.sequence_count += 1
-
-                        sequence += 1
-                        break
+                    # sequence=3
+                    # for b in range(0xff):
+                    #     target_future = asyncio.Future()
+                    #     protocol.target_futures[target] = target_future
+                    #     tunnel_request = KnxTunnellingRequest(
+                    #         communication_channel=protocol.communication_channel,
+                    #         sequence_count=protocol.sequence_count,
+                    #         knx_source=protocol.knx_source_address,
+                    #         knx_destination=target)
+                    #     tunnel_request.set_peer(transport.get_extra_info('sockname'))
+                    #     tunnel_request.a_memory_read(sequence=sequence, memory_address=0x0060, read_count=3)
+                    #     transport.sendto(tunnel_request.get_message())
+                    #
+                    #     alive = yield from target_future
+                    #
+                    #     if protocol.sequence_count == 255:
+                    #         protocol.sequence_count = 0
+                    #     else:
+                    #         protocol.sequence_count += 1
+                    #
+                    #     target_future = asyncio.Future()
+                    #     protocol.target_futures[target] = target_future
+                    #     tunnel_request = KnxTunnellingRequest(
+                    #         communication_channel=protocol.communication_channel,
+                    #         sequence_count=protocol.sequence_count,
+                    #         knx_source=protocol.knx_source_address,
+                    #         knx_destination=target)
+                    #     tunnel_request.set_peer(transport.get_extra_info('sockname'))
+                    #     tunnel_request.numbered_control_data(sequence=sequence)
+                    #     transport.sendto(tunnel_request.get_message())
+                    #
+                    #     alive = yield from target_future
+                    #
+                    #     if protocol.sequence_count == 255:
+                    #         protocol.sequence_count = 0
+                    #     else:
+                    #         protocol.sequence_count += 1
+                    #
+                    #     sequence += 1
+                    #     break
 
                 queue.task_done()
         except asyncio.CancelledError:
@@ -296,23 +284,25 @@ class KnxScanner():
 
     @asyncio.coroutine
     def bus_scan(self, knx_gateway):
-        queue = self.dev_get_bus_queue()
-        LOGGER.info('Scanning {} bus device(s)'.format(queue.qsize()))
+        self.add_bus_queue(knx_gateway.host)
+        queue = self.bus_queues.get(knx_gateway.host)
+        LOGGER.info('Scanning {} bus device(s) on {}'.format(queue.qsize(), knx_gateway.host))
         future = asyncio.Future()
         bus_con = KnxTunnelConnection(future)
-        transport, self.bus_protocol = yield from self.loop.create_datagram_endpoint(
+        transport, bus_protocol = yield from self.loop.create_datagram_endpoint(
             lambda: bus_con, remote_addr=(knx_gateway.host, knx_gateway.port))
+        self.bus_protocols.append(bus_protocol)
 
         # make sure the tunnel has been established
         connected = yield from future
         if connected:
-            workers = [asyncio.Task(self.knx_bus_worker(transport, self.bus_protocol, queue), loop=self.loop)]
+            workers = [asyncio.Task(self.knx_bus_worker(transport, bus_protocol, queue), loop=self.loop)]
             self.t0 = time.time()
             yield from queue.join()
             self.t1 = time.time()
             for w in workers:
                 w.cancel()
-            self.bus_protocol.knx_tunnel_disconnect()
+            bus_protocol.knx_tunnel_disconnect()
 
         for i in self.bus_devices_description:
             knx_gateway.bus_devices.append(i)
@@ -411,9 +401,12 @@ class KnxScanner():
             pass
 
     @asyncio.coroutine
-    def scan(self, search_mode=False, search_timeout=5, iface=None,
+    def scan(self, targets=None, search_mode=False, search_timeout=5, iface=None,
              bus_mode=False, bus_monitor_mode=False, group_monitor_mode=False):
         """The function that will be called by run_until_complete(). This is the main coroutine."""
+        if targets:
+            self.set_targets(targets)
+
         if search_mode:
             self.iface = iface
             self.search_timeout = search_timeout
@@ -473,7 +466,7 @@ class KnxScanner():
 
         print()
 
-        def pretty(d, indent=0):
+        def print_fmt(d, indent=0):
             for key, value in d.items():
                 if indent is 0:
                     print('   ' * indent + str(key))
@@ -485,9 +478,9 @@ class KnxScanner():
                             print()
                         print('   ' * (indent + 1) + str(v))
                 elif isinstance(value, dict):
-                    pretty(value, indent + 1)
+                    print_fmt(value, indent + 1)
                 else:
                     print(value)
             print()
 
-        pretty(out)
+        print_fmt(out)
