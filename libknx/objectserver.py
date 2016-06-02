@@ -5,3 +5,5 @@ Infos about the ObjectServer protocol:
 
 ObjectServer can either be included in KNXnet/IP packets (with an appropriate
 connection type, or via TCP on port 12004."""
+
+# TODO: ip control runs a objectserver on TCP port 12004
