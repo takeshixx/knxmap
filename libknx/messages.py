@@ -94,6 +94,7 @@ class KnxMessage(object):
         >>> parse_knx_address(99999)
         '8.6.159'
         """
+        assert isinstance(address, int)
         return '{}.{}.{}'.format((address >> 12) & 0xf, (address >> 8) & 0xf, address & 0xff)
 
     @staticmethod
@@ -103,6 +104,7 @@ class KnxMessage(object):
         >>> pack_knx_address('15.15.255')
         65535
         """
+        assert isinstance(address, str)
         parts = address.split('.')
         return (int(parts[0]) << 12) + (int(parts[1]) << 8) + (int(parts[2]))
 
@@ -113,6 +115,7 @@ class KnxMessage(object):
         >>> parse_knx_group_address(12345)
         '6/0/57'
         """
+        assert isinstance(address, int)
         return '{}/{}/{}'.format((address >> 11) & 0x1f, (address >> 8) & 0x7, address & 0xff)
 
     @staticmethod
@@ -122,6 +125,7 @@ class KnxMessage(object):
         >>> pack_knx_group_address('6/0/57')
         12345
         """
+        assert isinstance(address, str)
         parts = address.split('/')
         return (int(parts[0]) << 11) + (int(parts[1]) << 8) + (int(parts[2]))
 
@@ -132,6 +136,7 @@ class KnxMessage(object):
         >>> parse_knx_device_serial(b'\x00\x00\x00\x00\X12\x23')
         '000000005C58'
         """
+        assert isinstance(address, bytes)
         return '{0:02X}{1:02X}{2:02X}{3:02X}{4:02X}{5:02X}'.format(*address)
 
     @staticmethod
@@ -141,6 +146,7 @@ class KnxMessage(object):
         >>> parse_mac_address(b'\x12\x34\x56\x78\x90\x12')
         '12:34:56:78:90:12'
         """
+        assert isinstance(address, bytes)
         return '{0:02X}:{1:02X}:{2:02X}:{3:02X}:{4:02X}:{5:02X}'.format(*address)
 
     def set_peer(self, peer):
@@ -553,6 +559,7 @@ class KnxDescriptionResponse(KnxMessage):
 
 
 class KnxConnectRequest(KnxMessage):
+    # TODO: move constants to core.py
     layer_types = {
         0x02: 'TUNNEL_LINKLAYER',
         0x03: 'DEVICE_MGMT_CONNECTION',
@@ -606,11 +613,11 @@ class KnxConnectRequest(KnxMessage):
 
 
 class KnxConnectResponse(KnxMessage):
-    ERROR = None
-    ERROR_CODE = None
 
     def __init__(self, message=None):
         super(KnxConnectResponse, self).__init__()
+        self.ERROR = None
+        self.ERROR_CODE = None
         if message:
             self.unpack_knx_message(message)
         else:
@@ -655,12 +662,11 @@ class KnxTunnellingRequest(KnxMessage):
             self.communication_channel = communication_channel
             self.sequence_count = sequence_count
             self.cemi_message_code = message_code
+            self.cemi_npdu_len = 0
             if knx_source:
-                self.knx_source = self.pack_knx_address(knx_source)
+                self.set_knx_source(knx_source)
             if knx_destination:
                 self.set_knx_destination(knx_destination)
-
-            self.cemi_npdu_len = 0
 
             try:
                 self.source, self.port = sockname
@@ -946,10 +952,6 @@ class KnxDisconnectResponse(KnxMessage):
         except Exception as e:
             LOGGER.exception(e)
 
-# TODO: implement routing requests (multicast?)
-#       ROUTING_INDICATION
-#       ROUTING_LOST_MESSAGE
-
 
 class KnxDeviceConfigurationRequest(KnxMessage):
 
@@ -1031,3 +1033,8 @@ class KnxDeviceConfigurationAck(KnxMessage):
             self.body['status'] = self._unpack_stream('!B', message)
         except Exception as e:
             LOGGER.exception(e)
+
+
+# TODO: implement routing requests (multicast?)
+#       ROUTING_INDICATION
+#       ROUTING_LOST_MESSAGE
