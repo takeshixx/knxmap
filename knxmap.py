@@ -5,7 +5,7 @@ import argparse
 import logging
 import ipaddress
 
-import libknx
+from libknx import KnxScanner
 
 # asyncio requires at least Python 3.3
 if sys.version_info.major < 3 or \
@@ -103,37 +103,42 @@ class KnxTargets:
     def __init__(self, targets):
         self.targets = set()
         if not targets:
-            return
+            self.targets = None
+        elif not '-' in targets and self.is_valid_physical_address(targets):
+            self.targets.add(targets)
         else:
             assert isinstance(targets, str)
-            assert '-' in targets
-            assert targets.count('-') < 2
-            # TODO: also parse dashes in octets
-            try:
-                f, t = targets.split('-')
-            except ValueError:
-                return
-            if not self.is_valid_physical_address(f) or \
-                    not self.is_valid_physical_address(t):
-                LOGGER.error('Invalid physical address')
-                # TODO: make it group address aware
-            elif self.physical_address_to_int(t) <= \
-                    self.physical_address_to_int(f):
-                LOGGER.error('From should be smaller then To')
-            else:
-                self.targets = self.expand_targets(f, t)
+            if '-' in targets and targets.count('-') < 2:
+                # TODO: also parse dashes in octets
+                try:
+                    f, t = targets.split('-')
+                except ValueError:
+                    return
+                if not self.is_valid_physical_address(f) or \
+                        not self.is_valid_physical_address(t):
+                    LOGGER.error('Invalid physical address')
+                    # TODO: make it group address aware
+                elif self.physical_address_to_int(t) <= \
+                        self.physical_address_to_int(f):
+                    LOGGER.error('From should be smaller then To')
+                else:
+                    self.targets = self.expand_targets(f, t)
 
     @staticmethod
     def expand_targets(f, t):
-        targets = set()
-        for i in range(int(f.split('.')[0]),
-                       int(t.split('.')[0]) if int(t.split('.')[0]) > int(f.split('.')[0]) else (int(t.split('.')[0]) + 1)):
-            for j in range(int(f.split('.')[1]),
-                           int(t.split('.')[1]) if int(t.split('.')[1]) > int(f.split('.')[1]) else (int(t.split('.')[1]) + 1)):
-                for g in range(int(f.split('.')[2]),
-                               int(t.split('.')[2]) if int(t.split('.')[2]) > int(f.split('.')[2]) else (int(t.split('.')[2]) + 1)):
-                    targets.add('{}.{}.{}'.format(i, j, g))
-        return targets
+        start = list(map(int, f.split('.')))
+        end = list(map(int, t.split('.')))
+        temp = start
+        ret = set()
+        ret.add(f)
+        while temp != end:
+            start[2] += 1
+            for i in (2, 1):
+                if temp[i] == 256:
+                    temp[i] = 0
+                    temp[i - 1] += 1
+            ret.add('.'.join(map(str, temp)))
+        return ret
 
     @staticmethod
     def physical_address_to_int(address):
@@ -196,14 +201,13 @@ def main():
     else:
         LOGGER.info('Scanning {} target(s)'.format(len(targets.targets)))
 
-    scanner = libknx.KnxScanner(targets=targets.targets, max_workers=args.workers)
+    scanner = KnxScanner(targets=targets.targets, bus_targets=bus_targets.targets, max_workers=args.workers)
 
     try:
         loop.run_until_complete(scanner.scan(
             search_mode=args.search_mode,
             search_timeout=args.search_timeout,
             bus_mode=args.bus_mode,
-            bus_targets=bus_targets,
             bus_monitor_mode=args.bus_monitor_mode,
             group_monitor_mode=args.group_monitor_mode,
             iface=args.iface))
@@ -212,9 +216,10 @@ def main():
             t.cancel()
         loop.run_forever()
 
-        if scanner.bus_protocol:
+        if scanner.bus_protocols:
             # Make sure to send a DISCONNECT_REQUEST when the bus monitor will be closed
-            scanner.bus_protocol.knx_tunnel_disconnect()
+            for p in scanner.bus_protocols:
+                p.knx_tunnel_disconnect()
     finally:
         loop.close()
 
