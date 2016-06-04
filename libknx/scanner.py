@@ -2,6 +2,7 @@ import asyncio
 import argparse
 import binascii
 import collections
+import codecs
 import logging
 import os
 import socket
@@ -19,6 +20,7 @@ from .core import *
 from .messages import *
 from .gateway import *
 from .bus import *
+from .manufacturers import *
 
 __all__ = ['KnxScanner']
 
@@ -33,8 +35,18 @@ KnxTargetReport = collections.namedtuple(
     'device_serial',
     'friendly_name',
     'device_status',
+    'knx_medium',
+    'project_install_identifier',
     'supported_services',
     'bus_devices'])
+
+
+KnxBusTargetReport = collections.namedtuple(
+    'KnxBusTargetReport',
+    ['address',
+    'type',
+     'device_serial',
+     'manufacturer'])
 
 
 class KnxScanner:
@@ -62,7 +74,6 @@ class KnxScanner:
         self.alive_targets = set()
         self.knx_gateways = list()
         self.bus_devices = set()
-        self.bus_devices_description = set()
 
         # save some timing information
         self.t0 = time.time()
@@ -98,183 +109,82 @@ class KnxScanner:
                 target = queue.get_nowait()
                 LOGGER.info('BUS: target: {}'.format(target))
                 if not protocol.tunnel_established:
-                    LOGGER.error('Tunnel is not open!')
+                    LOGGER.error('KNX tunnel is not open!')
                     return
 
-                target_future = asyncio.Future()
-                protocol.target_futures[target] = target_future
-                tunnel_request = KnxTunnellingRequest(
-                    communication_channel=protocol.communication_channel,
-                    sequence_count=protocol.sequence_count,
-                    knx_source=protocol.knx_source_address,
-                    knx_destination=target)
-                tunnel_request.set_peer(transport.get_extra_info('sockname'))
-                tunnel_request.unnumbered_control_data()
-                transport.sendto(tunnel_request.get_message())
+                tunnel_request = protocol.make_tunnel_request(target)
+                tunnel_request.unnumbered_control_data('CONNECT')
+                alive = yield from protocol.send_data(tunnel_request.get_message(), target)
 
-                if protocol.sequence_count == 255:
-                    protocol.sequence_count = 0
-                else:
-                    protocol.sequence_count += 1
-
-                alive = yield from target_future
                 if alive:
-                    self.bus_devices.add(target)
-
-                    target_future = asyncio.Future()
-                    protocol.target_futures[target] = target_future
-                    tunnel_request = KnxTunnellingRequest(
-                        communication_channel=protocol.communication_channel,
-                        sequence_count=protocol.sequence_count,
-                        knx_source=protocol.knx_source_address,
-                        knx_destination=target)
-                    tunnel_request.set_peer(transport.get_extra_info('sockname'))
+                    # DeviceDescriptorRead
+                    tunnel_request = protocol.make_tunnel_request(target)
                     tunnel_request.a_device_descriptor_read()
-                    transport.sendto(tunnel_request.get_message())
-
-                    alive = yield from target_future
-                    if alive:
-                        self.bus_devices_description.add(target)
-
-                    if protocol.sequence_count == 255:
-                        protocol.sequence_count = 0
-                    else:
-                        protocol.sequence_count += 1
+                    descriptor = yield from protocol.send_data(tunnel_request.get_message(), target)
 
 
-                    target_future = asyncio.Future()
-                    protocol.target_futures[target] = target_future
-                    tunnel_request = KnxTunnellingRequest(
-                        communication_channel=protocol.communication_channel,
-                        sequence_count=protocol.sequence_count,
-                        knx_source=protocol.knx_source_address,
-                        knx_destination=target)
-                    tunnel_request.set_peer(transport.get_extra_info('sockname'))
-                    tunnel_request.numbered_control_data()
-                    transport.sendto(tunnel_request.get_message())
+                    # NCD
+                    tunnel_request = protocol.make_tunnel_request(target)
+                    tunnel_request.numbered_control_data('ACK')
+                    ret = yield from protocol.send_data(tunnel_request.get_message(), target)
 
-                    alive = yield from target_future
+                    if not ret:
+                        LOGGER.error('ERROR OCCURED')
 
-                    if protocol.sequence_count == 255:
-                        protocol.sequence_count = 0
-                    else:
-                        protocol.sequence_count += 1
+                    dev_desc = data = struct.unpack('!H', descriptor.body.get('cemi').get('data'))[0]
+                    manufacturer = None
+                    serial = None
+
+                    if dev_desc > 0x13:
+                        # PropertyValueRead
+                        tunnel_request = protocol.make_tunnel_request(target)
+                        tunnel_request.a_property_value_read(
+                            sequence=1, object_index=0, property_id=DEVICE_OBJECTS.get('PID_MANUFACTURER_ID'))
+                        manufacturer = yield from protocol.send_data(tunnel_request.get_message(), target)
+
+                        # NCD
+                        tunnel_request = protocol.make_tunnel_request(target)
+                        tunnel_request.numbered_control_data('ACK', sequence=1)
+                        ret = yield from protocol.send_data(tunnel_request.get_message(), target)
+
+                        if not ret:
+                            manufacturer = 'COULD NOT READ MANUFACTURER'
+                        else:
+                            if isinstance(manufacturer, (str, bytes)):
+                                manufacturer = struct.unpack('!H', manufacturer)[0]
+                                manufacturer = get_manufacturer_by_id(manufacturer)
+
+                        # PropertyValueRead
+                        tunnel_request = protocol.make_tunnel_request(target)
+                        tunnel_request.a_property_value_read(
+                            sequence=2, object_index=0, property_id=DEVICE_OBJECTS.get('PID_SERIAL_NUMBER'))
+                        serial = yield from protocol.send_data(tunnel_request.get_message(), target)
+
+                        # NCD
+                        tunnel_request = protocol.make_tunnel_request(target)
+                        tunnel_request.numbered_control_data('ACK', sequence=2)
+                        ret = yield from protocol.send_data(tunnel_request.get_message(), target)
+
+                        if not ret:
+                            serial = 'COULD NOT READ SERIAL'
+                        else:
+                            if isinstance(serial, (str, bytes)):
+                                serial = codecs.encode(serial, 'hex').decode().upper()
+
+                    if descriptor:
+                        t = KnxBusTargetReport(
+                            address=target,
+                            type=DEVICE_DESCRIPTORS.get(dev_desc) or 'Unknown',
+                            device_serial=serial or 'Unavailable',
+                            manufacturer=manufacturer or 'Unknown')
+
+                        self.bus_devices.add(t)
+
+                tunnel_request = protocol.make_tunnel_request(target)
+                tunnel_request.unnumbered_control_data('DISCONNECT')
+                yield from protocol.send_data(tunnel_request.get_message(), target)
 
 
-                    target_future = asyncio.Future()
-                    protocol.target_futures[target] = target_future
-                    tunnel_request = KnxTunnellingRequest(
-                        communication_channel=protocol.communication_channel,
-                        sequence_count=protocol.sequence_count,
-                        knx_source=protocol.knx_source_address,
-                        knx_destination=target)
-                    tunnel_request.set_peer(transport.get_extra_info('sockname'))
-                    tunnel_request.a_authorize_request(sequence=1)
-                    transport.sendto(tunnel_request.get_message())
-
-                    alive = yield from target_future
-
-                    if protocol.sequence_count == 255:
-                        protocol.sequence_count = 0
-                    else:
-                        protocol.sequence_count += 1
-
-                    target_future = asyncio.Future()
-                    protocol.target_futures[target] = target_future
-                    tunnel_request = KnxTunnellingRequest(
-                        communication_channel=protocol.communication_channel,
-                        sequence_count=protocol.sequence_count,
-                        knx_source=protocol.knx_source_address,
-                        knx_destination=target)
-                    tunnel_request.set_peer(transport.get_extra_info('sockname'))
-                    tunnel_request.numbered_control_data(sequence=1)
-                    transport.sendto(tunnel_request.get_message())
-
-                    alive = yield from target_future
-
-                    if protocol.sequence_count == 255:
-                        protocol.sequence_count = 0
-                    else:
-                        protocol.sequence_count += 1
-
-
-                    target_future = asyncio.Future()
-                    protocol.target_futures[target] = target_future
-                    tunnel_request = KnxTunnellingRequest(
-                        communication_channel=protocol.communication_channel,
-                        sequence_count=protocol.sequence_count,
-                        knx_source=protocol.knx_source_address,
-                        knx_destination=target)
-                    tunnel_request.set_peer(transport.get_extra_info('sockname'))
-                    #tunnel_request.a_property_value_read(sequence=2, property_id=CEMI_PROPERTY_IDS.get('PID_MANUFACTURE_DATA'))
-                    tunnel_request.a_property_value_read(sequence=2, object_index=0, property_id=PARAMETER_OBJECTS.get('PID_CURRENT_IP_ADDRESS'))
-                    transport.sendto(tunnel_request.get_message())
-
-                    alive = yield from target_future
-
-                    if protocol.sequence_count == 255:
-                        protocol.sequence_count = 0
-                    else:
-                        protocol.sequence_count += 1
-
-                    target_future = asyncio.Future()
-                    protocol.target_futures[target] = target_future
-                    tunnel_request = KnxTunnellingRequest(
-                        communication_channel=protocol.communication_channel,
-                        sequence_count=protocol.sequence_count,
-                        knx_source=protocol.knx_source_address,
-                        knx_destination=target)
-                    tunnel_request.set_peer(transport.get_extra_info('sockname'))
-                    tunnel_request.numbered_control_data(sequence=2)
-                    transport.sendto(tunnel_request.get_message())
-
-                    alive = yield from target_future
-
-                    if protocol.sequence_count == 255:
-                        protocol.sequence_count = 0
-                    else:
-                        protocol.sequence_count += 1
-
-                    # sequence=3
-                    # for b in range(0xff):
-                    #     target_future = asyncio.Future()
-                    #     protocol.target_futures[target] = target_future
-                    #     tunnel_request = KnxTunnellingRequest(
-                    #         communication_channel=protocol.communication_channel,
-                    #         sequence_count=protocol.sequence_count,
-                    #         knx_source=protocol.knx_source_address,
-                    #         knx_destination=target)
-                    #     tunnel_request.set_peer(transport.get_extra_info('sockname'))
-                    #     tunnel_request.a_memory_read(sequence=sequence, memory_address=0x0060, read_count=3)
-                    #     transport.sendto(tunnel_request.get_message())
-                    #
-                    #     alive = yield from target_future
-                    #
-                    #     if protocol.sequence_count == 255:
-                    #         protocol.sequence_count = 0
-                    #     else:
-                    #         protocol.sequence_count += 1
-                    #
-                    #     target_future = asyncio.Future()
-                    #     protocol.target_futures[target] = target_future
-                    #     tunnel_request = KnxTunnellingRequest(
-                    #         communication_channel=protocol.communication_channel,
-                    #         sequence_count=protocol.sequence_count,
-                    #         knx_source=protocol.knx_source_address,
-                    #         knx_destination=target)
-                    #     tunnel_request.set_peer(transport.get_extra_info('sockname'))
-                    #     tunnel_request.numbered_control_data(sequence=sequence)
-                    #     transport.sendto(tunnel_request.get_message())
-                    #
-                    #     alive = yield from target_future
-                    #
-                    #     if protocol.sequence_count == 255:
-                    #         protocol.sequence_count = 0
-                    #     else:
-                    #         protocol.sequence_count += 1
-                    #
-                    #     sequence += 1
-                    #     break
 
                 queue.task_done()
         except asyncio.CancelledError:
@@ -304,7 +214,7 @@ class KnxScanner:
                 w.cancel()
             bus_protocol.knx_tunnel_disconnect()
 
-        for i in self.bus_devices_description:
+        for i in self.bus_devices:
             knx_gateway.bus_devices.append(i)
 
         LOGGER.info('Bus scan took {} seconds'.format(self.t1 - self.t0))
@@ -348,6 +258,8 @@ class KnxScanner:
                         device_serial=response.body.get('dib_dev_info').get('knx_device_serial'),
                         friendly_name=response.body.get('dib_dev_info').get('device_friendly_name'),
                         device_status=response.body.get('dib_dev_info').get('device_status'),
+                        knx_medium=response.body.get('dib_dev_info').get('knx_medium'),
+                        project_install_identifier=response.body.get('dib_dev_info').get('project_install_identifier'),
                         supported_services=[
                             KNX_SERVICES[k] for k, v in
                             response.body.get('dib_supp_sv_families').get('families').items()],
@@ -388,6 +300,8 @@ class KnxScanner:
                         device_serial=response.body.get('dib_dev_info').get('knx_device_serial'),
                         friendly_name=response.body.get('dib_dev_info').get('device_friendly_name'),
                         device_status=response.body.get('dib_dev_info').get('device_status'),
+                        knx_medium=response.body.get('dib_dev_info').get('knx_medium'),
+                        project_install_identifier=response.body.get('dib_dev_info').get('project_install_identifier'),
                         supported_services=[
                             KNX_SERVICES[k] for k,v in
                             response.body.get('dib_supp_sv_families').get('families').items()],
@@ -458,11 +372,20 @@ class KnxScanner:
         o['MAC Address'] = knx_target.mac_address
         o['KNX Bus Address'] = knx_target.knx_address
         o['KNX Device Serial'] = knx_target.device_serial
+        o['KNX Medium'] = KNX_MEDIUMS.get(knx_target.knx_medium)
         o['Device Friendly Name'] = binascii.b2a_qp(knx_target.friendly_name.strip())
         o['Device Status'] = knx_target.device_status
+        o['Project Install Identifier'] = knx_target.project_install_identifier
         o['Supported Services'] = knx_target.supported_services
         if knx_target.bus_devices:
-            o['Bus Devices'] = knx_target.bus_devices
+            o['Bus Devices'] = list()
+            for d in knx_target.bus_devices:
+                _d = dict()
+                _d[d.address] = collections.OrderedDict()
+                _d[d.address]['Type'] = d.type
+                _d[d.address]['Device Serial'] = d.device_serial
+                _d[d.address]['Manufacturer'] = d.manufacturer
+                o['Bus Devices'].append(_d)
 
         print()
 
@@ -470,17 +393,24 @@ class KnxScanner:
             for key, value in d.items():
                 if indent is 0:
                     print('   ' * indent + str(key))
+                elif isinstance(value, (dict, collections.OrderedDict)):
+                    print('   ' * indent + str(key) + ': ')
                 else:
                     print('   ' * indent + str(key) + ': ', end="", flush=True)
-                if isinstance(value, list):
+
+                if key == 'Bus Devices':
+                    print()
+                    for i in value:
+                        print_fmt(i, indent + 1)
+                elif isinstance(value, list):
                     for i, v in enumerate(value):
                         if i is 0:
                             print()
                         print('   ' * (indent + 1) + str(v))
-                elif isinstance(value, dict):
+                elif isinstance(value, (dict, collections.OrderedDict)):
                     print_fmt(value, indent + 1)
                 else:
                     print(value)
-            print()
 
         print_fmt(out)
+        print()

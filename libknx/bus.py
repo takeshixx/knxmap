@@ -1,8 +1,8 @@
 """This module will include code that scans on the KNX bus for
 available devices."""
-import sys
 import logging
 import asyncio
+import collections
 import struct
 
 from .messages import *
@@ -12,35 +12,26 @@ LOGGER = logging.getLogger(__name__)
 
 
 class KnxTunnelConnection(asyncio.DatagramProtocol):
-    """Communicate with bus devices via a KNX gateway using TunnellingRequests."""
-
-    # TODO: a tunnelling connection is always used when the destination
-    # is a physical KNX address
-
-    def __init__(self, future, loop=None, group_monitor=True):
+    """Communicate with bus devices via a KNX gateway using TunnellingRequests. A tunneling
+    connection is always used if the bus destination is a physical KNX address."""
+    def __init__(self, future, loop=None):
         self.future = future
-        self.target_futures = {}
+        self.target_futures = dict()
         self.loop = loop or asyncio.get_event_loop()
         self.transport = None
-        self.group_monitor = group_monitor
         self.tunnel_established = False
         self.communication_channel = None
         self.sequence_count = 0
+        self.tpci_sequence_count = 0
         self.knx_source_address = None # TODO: probably not needed
 
     def connection_made(self, transport):
-        LOGGER.debug('Connection established')
         self.transport = transport
         self.peername = self.transport.get_extra_info('peername')
         self.sockname = self.transport.get_extra_info('sockname')
-        if self.group_monitor:
-            # Create a TUNNEL_LINKLAYER layer request (default)
-            connect_request = KnxConnectRequest(sockname=self.sockname)
-        else:
-            # Create a TUNNEL_BUSMONITOR layer request
-            connect_request = KnxConnectRequest(sockname=self.sockname, layer_type=0x80)
+        connect_request = KnxConnectRequest(sockname=self.sockname)
         self.transport.sendto(connect_request.get_message())
-        # Send CONNECTIONSTATE_REQUEST to keep the connection alive
+        # Schedule CONNECTIONSTATE_REQUEST to keep the connection alive
         self.loop.call_later(50, self.knx_keep_alive)
 
     def datagram_received(self, data, addr):
@@ -66,82 +57,74 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                 self.transport.close()
                 self.future.set_result(None)
         elif isinstance(knx_message, KnxTunnellingRequest):
+            knx_source = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_source'))
             knx_dest = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_destination'))
 
             if CEMI_PRIMITIVES[knx_message.body.get('cemi').get('message_code')] == 'L_Data.con' and \
-                    knx_message.body.get('cemi').get('tpci').get('type') == TPCI_TYPES['UCD']:
-
-                if knx_message.body.get('cemi').get('controlfield_1').get('confirm'):
-                    LOGGER.debug('KNX device not alive: {}'.format(knx_dest))
-                    if not self.target_futures[knx_dest].done():
-                        self.target_futures[knx_dest].set_result(False)
-                else:
-                    LOGGER.debug('KNX device is alive: {}'.format(knx_dest))
-                    if not self.target_futures[knx_dest].done():
-                        self.target_futures[knx_dest].set_result(True)
-
-            elif CEMI_PRIMITIVES[knx_message.body.get('cemi').get('message_code')] == 'L_Data.con' and \
-                    (knx_message.body.get('cemi').get('tpci').get('type') == TPCI_TYPES['NDT'] or
+                    (knx_message.body.get('cemi').get('tpci').get('type') == TPCI_TYPES['UCD'] or
                      knx_message.body.get('cemi').get('tpci').get('type') == TPCI_TYPES['NCD']):
 
                 if knx_message.body.get('cemi').get('controlfield_1').get('confirm'):
                     LOGGER.debug('KNX device not alive: {}'.format(knx_dest))
                     if not self.target_futures[knx_dest].done():
-                        self.target_futures[knx_dest].set_result(False)
-
-                if knx_dest in self.target_futures.keys():
-
-                    def waiter():
+                       self.target_futures[knx_dest].set_result(False)
+                       del self.target_futures[knx_dest]
+                else:
+                    LOGGER.debug('KNX device is alive: {}'.format(knx_dest))
+                    if knx_dest in self.target_futures.keys():
                         if not self.target_futures[knx_dest].done():
-                            self.target_futures[knx_dest].set_result(False)
-
-                    self.loop.call_later(2, waiter)
+                           self.target_futures[knx_dest].set_result(True)
+                           del self.target_futures[knx_dest]
 
             elif CEMI_PRIMITIVES[knx_message.body.get('cemi').get('message_code')] == 'L_Data.ind' and \
-                    knx_message.body.get('cemi').get('tpci').get('type') == TPCI_TYPES['NDT']:
+                            knx_message.body.get('cemi').get('tpci').get('type') == TPCI_TYPES['UCD']:
+
+                if knx_message.body.get('cemi').get('tpci').get('status') is 1:
+                    if knx_dest in self.target_futures.keys():
+                        if not self.target_futures[knx_dest].done():
+                            self.target_futures[knx_dest].set_result(False)
+                            del self.target_futures[knx_dest]
+
+            elif CEMI_PRIMITIVES[knx_message.body.get('cemi').get('message_code')] == 'L_Data.ind' and \
+                            knx_message.body.get('cemi').get('tpci').get('type') == TPCI_TYPES['NDP']:
 
                 if knx_message.body.get('cemi').get('apci') == APCI_TYPES['A_DeviceDescriptor_Response']:
-                    knx_source = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_source'))
-
-                    # dev
-                    if not knx_source in self.target_futures:
-                        LOGGER.info('KNX source {} is not in target_futures'.format(knx_source))
-                        LOGGER.info(knx_message.body)
-
-                    if not self.target_futures[knx_source].done():
-                        self.target_futures[knx_source].set_result(True)
+                    if knx_source in self.target_futures.keys():
+                        if not self.target_futures[knx_source].done():
+                            self.target_futures[knx_source].set_result(knx_message)
+                            del self.target_futures[knx_source]
 
                 elif knx_message.body.get('cemi').get('apci') == APCI_TYPES['A_Authorize_Response']:
-                    knx_source = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_source'))
 
-                    LOGGER.info('{}: AUTHORIZE_RESPONSE DATA: {}'.format(knx_source, knx_message.body.get('cemi').get('data')))
+                    LOGGER.info(
+                        '{}: AUTHORIZE_RESPONSE DATA: {}'.format(knx_source, knx_message.body.get('cemi').get('data')))
 
-                    if not self.target_futures[knx_source].done():
-                        self.target_futures[knx_source].set_result(True)
+                    if knx_source in self.target_futures.keys():
+                        if not self.target_futures[knx_source].done():
+                            self.target_futures[knx_source].set_result(True)
+                            del self.target_futures[knx_source]
 
                 elif knx_message.body.get('cemi').get('apci') == APCI_TYPES['A_PropertyValue_Response']:
-                    knx_source = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_source'))
-                    knx_dest = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_destination'))
 
                     LOGGER.info('{}/{}/{}: PROPERTY_VALUE_RESPONSE DATA: {}'.format(
-                        self.peername[0], knx_source, knx_dest, knx_message.body.get('cemi').get('data')))
+                        self.peername[0], knx_source, knx_dest, knx_message.body.get('cemi').get('data')[4:]))
 
-                    if not self.target_futures[knx_source].done():
-                        self.target_futures[knx_source].set_result(True)
+                    data = knx_message.body.get('cemi').get('data')[4:]
+
+                    if knx_source in self.target_futures.keys():
+                        if not self.target_futures[knx_source].done():
+                            self.target_futures[knx_source].set_result(data)
+                            del self.target_futures[knx_source]
 
                 elif knx_message.body.get('cemi').get('apci') == APCI_TYPES['A_Memory_Response']:
-                    knx_source = knx_message.parse_knx_address(knx_message.body.get('cemi').get('knx_source'))
 
                     LOGGER.info('{}/{}: MEMORY_RESPONSE DATA: {}'.format(
                         self.peername[0], knx_source, knx_message.body.get('cemi').get('data')))
 
-                    # dev
-                    if not knx_source in self.target_futures:
-                        LOGGER.info('KNX source {} is not in target_futures'.format(knx_source))
-                        LOGGER.info(knx_message.body)
-
-                    if not self.target_futures[knx_source].done():
-                        self.target_futures[knx_source].set_result(True)
+                    if knx_source in self.target_futures.keys():
+                        if not self.target_futures[knx_source].done():
+                            self.target_futures[knx_source].set_result(True)
+                            del self.target_futures[knx_source]
 
             if CEMI_PRIMITIVES[knx_message.body.get('cemi').get('message_code')] == 'L_Data.con' or \
                     CEMI_PRIMITIVES[knx_message.body.get('cemi').get('message_code')] == 'L_Data.ind':
@@ -166,6 +149,34 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             if not self.future.done():
                 self.future.set_result(None)
 
+    def send_data(self, data, target):
+        """A wrapper for sendto() that takes care of incrementing the sequence counter.
+
+        Note: the sequence counter field is only 1 byte. After incrementing the counter
+        to 255, it seems to be OK to just start over from 0. At least this applies
+        to the tested devices."""
+        f = asyncio.Future()
+        self.target_futures[target] = f
+        self.transport.sendto(data)
+        if self.sequence_count == 255:
+            self.sequence_count = 0
+        else:
+            self.sequence_count += 1
+        return f
+
+    def make_tunnel_request(self, knx_destination):
+        """A helper function that returns a KnxTunnellingRequest that is already predefined
+        for the current tunnel connection. It already sets the communication channel, the
+        sequence count, the KNX source address and the peer which are all handled by the
+        protocol instance anyway."""
+        tunnel_request = KnxTunnellingRequest(
+            communication_channel=self.communication_channel,
+            sequence_count=self.sequence_count,
+            knx_source=self.knx_source_address,
+            knx_destination=knx_destination)
+        tunnel_request.set_peer(self.transport.get_extra_info('sockname'))
+        return tunnel_request
+
     def knx_keep_alive(self):
         """Sending CONNECTIONSTATE_REQUESTS periodically to keep the connection alive."""
         connection_state = KnxConnectionStateRequest(
@@ -182,17 +193,16 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
 
 
 class KnxRoutingConnection(asyncio.DatagramProtocol):
+    # TODO: implement routing
+    """Routing is used to send KNX messages to multiple devices without any
+    connection setup (in contrast to tunnelling).
 
-    # TODO: routing is used to send KNX messages to multiple devices
-    # without any connection setup (in contrast to tunnelling)
+        * uses UDP multicast (224.0.23.12) packets to port 3671
 
-    # TODO: uses UDP multicast (224.0.23.12) packets to port 3671
+        * no confirmation of successful transmission
 
-    # TODO: no confirmation of successful transmission
-
-    # TODO: will send message to group address if supplied group address
-    # is known by devices?
-
+        * will send message to group address if supplied group address is known
+        by devices?"""
     def __init__(self, future, loop=None):
         self.future = future
         self.loop = loop or asyncio.get_event_loop()
@@ -208,7 +218,7 @@ class KnxRoutingConnection(asyncio.DatagramProtocol):
         self.transport.get_extra_info('socket').sendto(message.get_message(), ('224.0.23.12', 3671))
 
 
-class KnxBusMonitor(asyncio.DatagramProtocol):
+class KnxBusMonitor(KnxTunnelConnection):
     """Implementation of bus_monitor_mode and group_monitor_mode."""
     def __init__(self, future, loop=None, group_monitor=True):
         self.future = future
@@ -220,7 +230,6 @@ class KnxBusMonitor(asyncio.DatagramProtocol):
         self.sequence_count = 0
 
     def connection_made(self, transport):
-        LOGGER.debug('Connection established')
         self.transport = transport
         self.peername = self.transport.get_extra_info('peername')
         self.sockname = self.transport.get_extra_info('sockname')
@@ -298,17 +307,3 @@ class KnxBusMonitor(asyncio.DatagramProtocol):
                 CEMI_PRIMITIVES[message.body.get('cemi').get('message_code')],
                 message.body.get('cemi').get('raw_frame'))
         LOGGER.info(format)
-
-    def knx_keep_alive(self):
-        """Sending CONNECTIONSTATE_REQUESTS periodically to keep the connection alive."""
-        connection_state = KnxConnectionStateRequest(
-            sockname=self.sockname,
-            communication_channel=self.communication_channel)
-        self.transport.sendto(connection_state.get_message())
-
-    def knx_tunnel_disconnect(self):
-        """Close the tunnel connection with a DISCONNECT_REQUEST."""
-        disconnect_request = KnxDisconnectRequest(
-            sockname=self.sockname,
-            communication_channel=self.communication_channel)
-        self.transport.sendto(disconnect_request.get_message())
