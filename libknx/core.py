@@ -3,6 +3,7 @@ including constants or package exceptions. This should only be
 imported by other modules in this package."""
 __all__ = ['KNX_CONSTANTS',
            'KNX_SERVICES',
+           'KNX_MEDIUMS',
            'KNX_MESSAGE_TYPES',
            'KNX_STATUS_CODES',
            'CEMI_PRIMITIVES',
@@ -12,6 +13,7 @@ __all__ = ['KNX_CONSTANTS',
            '_APCI_TYPES',
            'DEVICE_OBJECTS',
            'PARAMETER_OBJECTS',
+           'DEVICE_DESCRIPTORS',
            'Error']
 
 
@@ -28,6 +30,15 @@ KNX_SERVICES = {
     0x06: 'KNXnet/IP Remote Logging',
     0x07: 'KNXnet/IP Remote Configuration and Diagnosis',
     0x08: 'KNXnet/IP Object Server'}
+
+
+KNX_MEDIUMS = {
+    0x01: 'reserved',
+    0x02: 'KNX TP',
+    0x04: 'KNX PL110',
+    0x08: 'reserved',
+    0x10: 'KNX RF',
+    0x20: 'KNX IP'}
 
 
 _KNX_MESSAGE_TYPES = {
@@ -146,7 +157,7 @@ CEMI_PRIORITIES = {
 
 
 COMM_TYPES = {
-    0x00: 'Unnumbered Data Packet (UDT)',
+    0x00: 'Unnumbered Data Packet (UDP)',
     0x01: 'Numbered Data Packet (NDP)',
     0x02: 'Unnumbered Control Data (UCD)',
     0x03: 'Numbered Control Data (NCD)'}
@@ -154,7 +165,7 @@ COMM_TYPES = {
 
 TPCI_TYPES = {
     'UDP': 0x00,
-    'NDT': 0x01,
+    'NDP': 0x01,
     'UCD': 0x02,
     'NCD': 0x03}
 
@@ -332,6 +343,40 @@ PARAMETER_OBJECTS = {
     'PID_MSG_TRANSMIT_TO_KNX': 0x4b,
     'PID_FRIENDLY_NAME': 0x4c,
     'PID_ROUTING_BUSY_WAIT_TIME': 0x4e}
+
+
+DEVICE_DESCRIPTORS = {
+    0x0010: 'System 1 (BCU 1)',
+    0x0011: 'System 1 (BCU 1)',
+    0x0012: 'System 1 (BCU 1)',
+    0x0013: 'System 1 (BCU 1)',
+    0x0020: 'System 2 (BCU 2)',
+    0x0021: 'System 2 (BCU 2)',
+    0x0025: 'System 2 (BCU 2)',
+    0x0300: 'System 300',
+    0x0310: 'TP1 USB interface v1',
+    0x0700: 'BIM M112',
+    0x0701: 'BIM M112',
+    0x0705: 'BIM M112',
+    0x07B0: 'System B',
+    0x0810: 'IR-Decoder',
+    0x0811: 'IR-Decoder',
+    0x0910: 'Coupler 1.0',
+    0x0911: 'Coupler 1.1',
+    0x0912: 'Coupler 1.2',
+    0x091A: 'KNXnet/IP Router',
+    0x0AFD: 'none',
+    0x0AFE: 'none',
+    0x1012: 'BCU 1',
+    0x1013: 'BCU 1',
+    0x17B0: 'System B',
+    0x1900: 'Media Coupler PL-TP',
+    0x2010: 'Bidirectional devices',
+    0x2110: 'Unidirectional devices',
+    0x2322: 'RF USB interface v2',
+    0x3012: 'BCU 1',
+    0x4012: 'BCU 1',
+    0x5705: 'System 7'}
 
 
 class Error(Exception):
