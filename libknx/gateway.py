@@ -2,7 +2,7 @@
 import asyncio
 import logging
 
-import libknx
+from .messages import *
 
 __all__ = ['KnxGatewaySearch',
            'KnxGatewayDescription']
@@ -20,13 +20,13 @@ class KnxGatewaySearch(asyncio.DatagramProtocol):
         self.transport = transport
         self.peername = self.transport.get_extra_info('peername')
         self.sockname = self.transport.get_extra_info('sockname')
-        packet = libknx.messages.KnxSearchRequest(sockname=self.sockname)
+        packet = KnxSearchRequest(sockname=self.sockname)
         self.transport.get_extra_info('socket').sendto(packet.get_message(), ('224.0.23.12', 3671))
 
     def datagram_received(self, data, addr):
         try:
             LOGGER.debug('Parsing KnxSearchResponse')
-            response = libknx.messages.KnxSearchResponse(data)
+            response = KnxSearchResponse(data)
 
             if response:
                 self.responses.add((addr, response))
@@ -51,7 +51,7 @@ class KnxGatewayDescription(asyncio.DatagramProtocol):
         self.sockname = self.transport.get_extra_info('sockname')
         self.wait = self.loop.call_later(self.timeout, self.connection_timeout)
 
-        packet = libknx.messages.KnxDescriptionRequest(sockname=self.sockname)
+        packet = KnxDescriptionRequest(sockname=self.sockname)
         self.transport.sendto(packet.get_message())
 
     def connection_timeout(self):
@@ -64,7 +64,7 @@ class KnxGatewayDescription(asyncio.DatagramProtocol):
         self.transport.close()
         try:
             LOGGER.debug('Parsing KnxDescriptionResponse')
-            self.response = libknx.KnxDescriptionResponse(data)
+            self.response = KnxDescriptionResponse(data)
 
             if self.response:
                 self.future.set_result(self.response)
@@ -73,3 +73,10 @@ class KnxGatewayDescription(asyncio.DatagramProtocol):
                 self.future.set_result(False)
         except Exception as e:
             LOGGER.exception(e)
+
+
+class KnxDeviceConfigurationConnection(asyncio.DatagramProtocol):
+    # TODO: implement device configuration connection
+
+    def __init__(self):
+        pass
