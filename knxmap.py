@@ -46,9 +46,6 @@ ARGS.add_argument(
     '--search-timeout', action='store', dest='search_timeout', type=int,
     default=5, help='Timeout in seconds for multicast responses')
 ARGS.add_argument(
-    '--bus', action='store_true', dest='bus_mode',
-    default=False, help='Scan bus on KNXnet/IP gateway')
-ARGS.add_argument(
     '--bus-targets', action='store', dest='bus_targets',
     default=None, help='Bus target range')
 ARGS.add_argument(
@@ -92,13 +89,13 @@ def main():
     else:
         LOGGER.info('Scanning {} target(s)'.format(len(targets.targets)))
 
-    scanner = KnxScanner(targets=targets.targets, bus_targets=bus_targets.targets, max_workers=args.workers)
+    scanner = KnxScanner(targets=targets.targets, max_workers=args.workers)
 
     try:
         loop.run_until_complete(scanner.scan(
             search_mode=args.search_mode,
             search_timeout=args.search_timeout,
-            bus_mode=args.bus_mode,
+            bus_targets=bus_targets.targets,
             bus_info=args.bus_info,
             bus_monitor_mode=args.bus_monitor_mode,
             group_monitor_mode=args.group_monitor_mode,
