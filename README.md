@@ -1,6 +1,6 @@
 # KNXmap
 
-A tool that scans for KNXnet/IP gateways on the network and for attached devices on the KNX bus.
+A tool for scanning and auditing KNXnet/IP gateways on IP driven networks. In addition to search and identify gateways KNXmap allows to scan for devices on the KNX bus via KNXnet/IP gateways.
 
 ## Compatibility
 
@@ -28,25 +28,37 @@ This is the default mode of KNXmap. It sends KNX description request to the supp
 knxmap.py 192.168.1.100
 ```
 
-KNXmap supports to scan multiple targets at once by supplying multiple IP addresses separated by a space. If the [ipaddress](https://docs.python.org/3/library/ipaddress.html) module is available, also CIDR notations in target definitions are supported:
+KNXmap supports to scan multiple targets at once by supplying multiple IP addresses separated by a space. Targets can also be defined as networks in CIDR notation:
 
 ```
 knxmap.py 192.168.1.100 192.168.1.110 192.168.2.0/24
 ```
 
-**Note**: The ipaddress module is available in the standard library since Python 3.3. However, they is also a port for older versions available on [PyPI](https://pypi.python.org/pypi/ipaddress).
+**Note**: Many KNXnet/IP gateways fail to properly handle subsequent discovery requests.
 
 ### Bus Mode
 
 In addition to the discovery mode, KNXmap also supports to scan for devices on the KNX bus.
 
 ```
-knxmap.py --bus 192.168.1.100
+knxmap.py --bus-targets 1.0.0-1.1.255 192.168.1.100
+```
+
+**Note**: Currently only target ranges are allow, so at least two devices must be scanned because e.g. 1.1.1-1.1.1 is not a valid target definition.
+
+The default mode is to only check if sending messages to a address returns an error or not. This helps to identify potential devices and alive targets.
+
+#### Bus Device Information
+
+In addition to the default bus scanning KNXmap can also extract basic information from devices for further identification by supplying the `--bus-info` argument:
+
+```
+knxmap.py --bus-targets 1.0.0-1.1.255 --bus-info 192.168.1.100
 ```
 
 ### Search Mode
 
-KNX supports finding devices by sending multicast packets that should be answered by any KNXnet/IP gateway. KNXmap supports gateway searching via the --search flag. It requires the -i/--interface and superuser privileges:
+KNX supports finding devices by sending multicast packets that should be answered by any KNXnet/IP gateway. KNXmap supports gateway searching via the `--search` flag. It requires the `-i`/`--interface` and superuser privileges:
 
 ```
 sudo knxmap.py --search --interface eth1
@@ -58,11 +70,10 @@ sudo knxmap.py --search --interface eth1
 
 KNXmap supports two different monitoring modes:
 
-* Bus monitoring (--bus-monitor) prints the raw messages received from the KNX bus.
-* Group monitoring (--group-monitor) prints all group messages received from the KNX bus.
+* Bus monitoring (`--bus-monitor`) prints the raw messages received from the KNX bus.
+* Group monitoring (`--group-monitor`) prints all group messages received from the KNX bus.
 
-## TODO (will be removed from the readme)
-
-- More information about vendor ID's and the area where they are located in the memory
-- Add the device databases from the vendor sites
-- Implement ObjectServer (TCP and/or UDP?)
+## TODO
+ 
+- Implement KNXnet/IP Routing (bus.py)
+- Implement ObjectServer (TCP and/or UDP?) (objectserver.py)
