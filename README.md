@@ -77,3 +77,11 @@ KNXmap supports two different monitoring modes:
  
 - Implement KNXnet/IP Routing (bus.py)
 - Implement ObjectServer (TCP and/or UDP?) (objectserver.py)
+
+## Hacking
+
+Enable full debugging and verbosity for development:
+
+```
+PYTHONASYNCIODEBUG=1 knxmap.py 192.168.178.20 --bus-targets 1.1.0-1.1.6 --bus-info -v
+```
