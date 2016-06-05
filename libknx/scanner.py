@@ -74,6 +74,7 @@ class KnxScanner:
         self.alive_targets = set()
         self.knx_gateways = list()
         self.bus_devices = set()
+        self.bus_info = False
 
         # save some timing information
         self.t0 = time.time()
@@ -116,54 +117,116 @@ class KnxScanner:
                 tunnel_request.unnumbered_control_data('CONNECT')
                 alive = yield from protocol.send_data(tunnel_request.get_message(), target)
 
+                sequence = 0
+
                 if alive:
+                    if not self.bus_info:
+                        t = KnxBusTargetReport(
+                            address=target,
+                            type=None,
+                            device_serial=None,
+                            manufacturer=None)
+                        self.bus_devices.add(t)
+                        queue.task_done()
+                        continue
+
+                    # TODO: the device is alive, but not probably we cannot read any properties
+
                     # DeviceDescriptorRead
                     tunnel_request = protocol.make_tunnel_request(target)
-                    tunnel_request.a_device_descriptor_read()
+                    tunnel_request.a_device_descriptor_read(sequence=sequence)
                     descriptor = yield from protocol.send_data(tunnel_request.get_message(), target)
 
+                    if not isinstance(descriptor, KnxTunnellingRequest):
+                        t = KnxBusTargetReport(
+                            address=target,
+                            type=None,
+                            device_serial=None,
+                            manufacturer=None)
+                        self.bus_devices.add(t)
+                        tunnel_request = protocol.make_tunnel_request(target)
+                        tunnel_request.unnumbered_control_data('DISCONNECT')
+                        protocol.send_data(tunnel_request.get_message(), target)
+                        queue.task_done()
+                        continue
 
                     # NCD
                     tunnel_request = protocol.make_tunnel_request(target)
-                    tunnel_request.numbered_control_data('ACK')
+                    tunnel_request.numbered_control_data('ACK', sequence=sequence)
                     ret = yield from protocol.send_data(tunnel_request.get_message(), target)
 
                     if not ret:
                         LOGGER.error('ERROR OCCURED')
+
+                    sequence += 1
 
                     dev_desc = data = struct.unpack('!H', descriptor.body.get('cemi').get('data'))[0]
                     manufacturer = None
                     serial = None
 
                     if dev_desc > 0x13:
+                        # System 1 devices do not have interface objects or a serial number
                         # PropertyValueRead
                         tunnel_request = protocol.make_tunnel_request(target)
                         tunnel_request.a_property_value_read(
-                            sequence=1, object_index=0, property_id=DEVICE_OBJECTS.get('PID_MANUFACTURER_ID'))
+                            sequence=sequence, object_index=0, property_id=DEVICE_OBJECTS.get('PID_MANUFACTURER_ID'))
                         manufacturer = yield from protocol.send_data(tunnel_request.get_message(), target)
-
-                        # NCD
+                        manufacturer = manufacturer.body.get('cemi').get('data')[4:]
+                    else:
+                        # MemoryRead manufacturer ID
                         tunnel_request = protocol.make_tunnel_request(target)
-                        tunnel_request.numbered_control_data('ACK', sequence=1)
-                        ret = yield from protocol.send_data(tunnel_request.get_message(), target)
+                        tunnel_request.a_memory_read(
+                            sequence=sequence, memory_address=0x0104, read_count=1)
+                        manufacturer = yield from protocol.send_data(tunnel_request.get_message(), target)
+                        manufacturer = manufacturer.body.get('cemi').get('data')[2:]
 
-                        if not ret:
-                            manufacturer = 'COULD NOT READ MANUFACTURER'
-                        else:
-                            if isinstance(manufacturer, (str, bytes)):
-                                manufacturer = struct.unpack('!H', manufacturer)[0]
-                                manufacturer = get_manufacturer_by_id(manufacturer)
+                    # NCD
+                    tunnel_request = protocol.make_tunnel_request(target)
+                    tunnel_request.numbered_control_data('ACK', sequence=sequence)
+                    ret = yield from protocol.send_data(tunnel_request.get_message(), target)
 
-                        # PropertyValueRead
+                    if not ret:
+                        manufacturer = 'COULD NOT READ MANUFACTURER'
+                    else:
+                        if isinstance(manufacturer, (str, bytes)):
+                            manufacturer = int.from_bytes(manufacturer, 'big')
+                            manufacturer = get_manufacturer_by_id(manufacturer)
+
+                    sequence += 1
+
+                    if dev_desc <= 0x13:
+                        # MemoryRead application program
                         tunnel_request = protocol.make_tunnel_request(target)
-                        tunnel_request.a_property_value_read(
-                            sequence=2, object_index=0, property_id=DEVICE_OBJECTS.get('PID_SERIAL_NUMBER'))
-                        serial = yield from protocol.send_data(tunnel_request.get_message(), target)
+                        tunnel_request.a_memory_read(
+                            sequence=sequence, memory_address=0x0104, read_count=4)
+                        application_program = yield from protocol.send_data(tunnel_request.get_message(), target)
+                        application_program = application_program.body.get('cemi').get('data')[2:]
+
+                        LOGGER.info('DATA: {}'.format(application_program))
+                        LOGGER.info('APP_PROGRAM: {}'.format(codecs.encode(application_program, 'hex')))
 
                         # NCD
                         tunnel_request = protocol.make_tunnel_request(target)
                         tunnel_request.numbered_control_data('ACK', sequence=2)
                         ret = yield from protocol.send_data(tunnel_request.get_message(), target)
+
+                        sequence += 1
+
+
+                    if dev_desc > 0x13:
+                        # PropertyValueRead
+                        tunnel_request = protocol.make_tunnel_request(target)
+                        tunnel_request.a_property_value_read(
+                            sequence=sequence, object_index=0, property_id=DEVICE_OBJECTS.get('PID_SERIAL_NUMBER'))
+                        serial = yield from protocol.send_data(tunnel_request.get_message(), target)
+                        serial = serial.body.get('cemi').get('data')[4:]
+
+                        # NCD
+                        tunnel_request = protocol.make_tunnel_request(target)
+                        tunnel_request.numbered_control_data('ACK', sequence=sequence)
+                        ret = yield from protocol.send_data(tunnel_request.get_message(), target)
+
+                        sequence += 1
 
                         if not ret:
                             serial = 'COULD NOT READ SERIAL'
@@ -177,14 +240,13 @@ class KnxScanner:
                             type=DEVICE_DESCRIPTORS.get(dev_desc) or 'Unknown',
                             device_serial=serial or 'Unavailable',
                             manufacturer=manufacturer or 'Unknown')
-
                         self.bus_devices.add(t)
 
-                tunnel_request = protocol.make_tunnel_request(target)
-                tunnel_request.unnumbered_control_data('DISCONNECT')
-                yield from protocol.send_data(tunnel_request.get_message(), target)
-
-
+                    # properly close the TPCI connection
+                    #protocol.knx_tpci_disconnect(target)
+                    tunnel_request = protocol.make_tunnel_request(target)
+                    tunnel_request.unnumbered_control_data('DISCONNECT')
+                    protocol.send_data(tunnel_request.get_message(), target)
 
                 queue.task_done()
         except asyncio.CancelledError:
@@ -316,7 +378,7 @@ class KnxScanner:
 
     @asyncio.coroutine
     def scan(self, targets=None, search_mode=False, search_timeout=5, iface=None,
-             bus_mode=False, bus_monitor_mode=False, group_monitor_mode=False):
+             bus_mode=False, bus_info=False, bus_monitor_mode=False, group_monitor_mode=False):
         """The function that will be called by run_until_complete(). This is the main coroutine."""
         if targets:
             self.set_targets(targets)
@@ -352,6 +414,7 @@ class KnxScanner:
                 w.cancel()
 
             if bus_mode and self.knx_gateways:
+                self.bus_info = bus_info
                 bus_scanners = [asyncio.Task(self.bus_scan(g), loop=self.loop) for g in self.knx_gateways]
                 yield from asyncio.wait(bus_scanners)
             else:
@@ -382,9 +445,12 @@ class KnxScanner:
             for d in knx_target.bus_devices:
                 _d = dict()
                 _d[d.address] = collections.OrderedDict()
-                _d[d.address]['Type'] = d.type
-                _d[d.address]['Device Serial'] = d.device_serial
-                _d[d.address]['Manufacturer'] = d.manufacturer
+                if d.type:
+                    _d[d.address]['Type'] = d.type
+                if d.device_serial:
+                    _d[d.address]['Device Serial'] = d.device_serial
+                if d.manufacturer:
+                    _d[d.address]['Manufacturer'] = d.manufacturer
                 o['Bus Devices'].append(_d)
 
         print()
@@ -394,7 +460,10 @@ class KnxScanner:
                 if indent is 0:
                     print('   ' * indent + str(key))
                 elif isinstance(value, (dict, collections.OrderedDict)):
-                    print('   ' * indent + str(key) + ': ')
+                    if not len(value.keys()):
+                        print('   ' * indent + str(key))
+                    else:
+                        print('   ' * indent + str(key) + ': ')
                 else:
                     print('   ' * indent + str(key) + ': ', end="", flush=True)
 
