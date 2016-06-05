@@ -1,5 +1,10 @@
+"""This module contains various helper classes that make handling targets and sets
+of targets and results easiert."""
 import logging
 import ipaddress
+import collections
+
+from .messages import *
 
 LOGGER = logging.getLogger(__name__)
 
@@ -64,25 +69,29 @@ class KnxTargets:
                     self.targets = self.expand_targets(f, t)
 
     @staticmethod
+    def target_gen(f, t):
+        f = KnxMessage.pack_knx_address(f)
+        t = KnxMessage.pack_knx_address(t)
+        for i in range(f, t + 1):
+            yield KnxMessage.parse_knx_address(i)
+
+    @staticmethod
     def expand_targets(f, t):
-        start = list(map(int, f.split('.')))
-        end = list(map(int, t.split('.')))
-        temp = start
         ret = set()
-        ret.add(f)
-        while temp != end:
-            start[2] += 1
-            for i in (2, 1):
-                if temp[i] == 256:
-                    temp[i] = 0
-                    temp[i - 1] += 1
-            ret.add('.'.join(map(str, temp)))
+        f = KnxMessage.pack_knx_address(f)
+        t = KnxMessage.pack_knx_address(t)
+        for i in range(f, t + 1):
+            ret.add(KnxMessage.parse_knx_address(i))
         return ret
 
     @staticmethod
     def physical_address_to_int(address):
         parts = address.split('.')
         return (int(parts[0]) << 12) + (int(parts[1]) << 8) + (int(parts[2]))
+
+    @staticmethod
+    def int_to_physical_address(address):
+        return '{}.{}.{}'.format((address >> 12) & 0xf, (address >> 8) & 0xf, address & 0xff)
 
     @staticmethod
     def is_valid_physical_address(address):
@@ -117,6 +126,11 @@ class KnxTargets:
 
 
 class BusResultSet:
+    # TODO: implement
 
     def __init__(self):
+        self.targets = collections.OrderedDict()
+
+    def add(self, target):
+        """Add a target to the result set, at the right position."""
         pass
