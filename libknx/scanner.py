@@ -51,37 +51,29 @@ KnxBusTargetReport = collections.namedtuple(
 
 class KnxScanner:
     """The main scanner instance that takes care of scheduling workers for the targets."""
-    def __init__(self, targets=None, bus_targets=None, max_workers=100, loop=None, ):
+    def __init__(self, targets=None, max_workers=100, loop=None, ):
         self.loop = loop or asyncio.get_event_loop()
+        # The number of concurrent workers for discovering KNXnet/IP gateways
         self.max_workers = max_workers
-        # the Queue contains all targets
+        # q contains all KNXnet/IP gateways
         self.q = Queue(loop=self.loop)
+        # bus_queues is a dict containing a bus queue for each KNXnet/IP gateway
         self.bus_queues = dict()
-        self.bus_q = Queue(loop=self.loop)
-        self._bus_targets = bus_targets
+        # bus_protocols is a list of all bus protocol instances for proper connection shutdown
         self.bus_protocols = list()
-
+        # knx_gateways is a list of KnxTargetReport objects, one for each found KNXnet/IP gateway
+        self.knx_gateways = list()
+        # bus_devices is a list of KnxBusTargetReport objects, one for each found bus device
+        self.bus_devices = set()
+        self.bus_info = False
+        self.t0 = time.time()
+        self.t1 = None
         if targets:
             self.set_targets(targets)
         else:
             self.targets = set()
 
-        if bus_targets:
-            self.set_bus_targets(bus_targets)
-        else:
-            self.bus_targets = set()
-
-        self.alive_targets = set()
-        self.knx_gateways = list()
-        self.bus_devices = set()
-        self.bus_info = False
-
-        # save some timing information
-        self.t0 = time.time()
-        self.t1 = None
-
     def set_targets(self, targets):
-        #assert isinstance(targets, set)
         self.targets = targets
         for target in self.targets:
             self.add_target(target)
@@ -89,18 +81,11 @@ class KnxScanner:
     def add_target(self, target):
         self.q.put_nowait(target)
 
-    def add_bus_queue(self, gateway):
+    def add_bus_queue(self, gateway, bus_targets):
         self.bus_queues[gateway] = Queue(loop=self.loop)
-        for target in self._bus_targets:
+        for target in bus_targets:
             self.bus_queues[gateway].put_nowait(target)
-
-    def set_bus_targets(self, targets):
-        self.bus_targets = targets
-        for target in self.bus_targets:
-            self.add_bus_target(target)
-
-    def add_bus_target(self, target):
-        self.bus_q.put_nowait(target)
+        return self.bus_queues[gateway]
 
     @asyncio.coroutine
     def knx_bus_worker(self, transport, protocol, queue):
@@ -137,7 +122,8 @@ class KnxScanner:
                     tunnel_request.a_device_descriptor_read(sequence=sequence)
                     descriptor = yield from protocol.send_data(tunnel_request.get_message(), target)
 
-                    if not isinstance(descriptor, KnxTunnellingRequest):
+                    if not isinstance(descriptor, KnxTunnellingRequest) or not \
+                            descriptor.body.get('cemi').get('apci') == APCI_TYPES.get('A_DeviceDescriptor_Response'):
                         t = KnxBusTargetReport(
                             address=target,
                             type=None,
@@ -160,7 +146,7 @@ class KnxScanner:
 
                     sequence += 1
 
-                    dev_desc = data = struct.unpack('!H', descriptor.body.get('cemi').get('data'))[0]
+                    dev_desc = struct.unpack('!H', descriptor.body.get('cemi').get('data'))[0]
                     manufacturer = None
                     serial = None
 
@@ -178,6 +164,7 @@ class KnxScanner:
                         tunnel_request.a_memory_read(
                             sequence=sequence, memory_address=0x0104, read_count=1)
                         manufacturer = yield from protocol.send_data(tunnel_request.get_message(), target)
+                        # TODO: check if it returned a proper response
                         manufacturer = manufacturer.body.get('cemi').get('data')[2:]
 
                     # NCD
@@ -208,10 +195,9 @@ class KnxScanner:
                         # NCD
                         tunnel_request = protocol.make_tunnel_request(target)
                         tunnel_request.numbered_control_data('ACK', sequence=2)
-                        ret = yield from protocol.send_data(tunnel_request.get_message(), target)
+                        yield from protocol.send_data(tunnel_request.get_message(), target)
 
                         sequence += 1
-
 
                     if dev_desc > 0x13:
                         # PropertyValueRead
@@ -243,7 +229,7 @@ class KnxScanner:
                         self.bus_devices.add(t)
 
                     # properly close the TPCI connection
-                    #protocol.knx_tpci_disconnect(target)
+                    # protocol.knx_tpci_disconnect(target)
                     tunnel_request = protocol.make_tunnel_request(target)
                     tunnel_request.unnumbered_control_data('DISCONNECT')
                     protocol.send_data(tunnel_request.get_message(), target)
@@ -255,9 +241,8 @@ class KnxScanner:
             pass
 
     @asyncio.coroutine
-    def bus_scan(self, knx_gateway):
-        self.add_bus_queue(knx_gateway.host)
-        queue = self.bus_queues.get(knx_gateway.host)
+    def bus_scan(self, knx_gateway, bus_targets):
+        queue = self.add_bus_queue(knx_gateway.host, bus_targets)
         LOGGER.info('Scanning {} bus device(s) on {}'.format(queue.qsize(), knx_gateway.host))
         future = asyncio.Future()
         bus_con = KnxTunnelConnection(future)
@@ -265,7 +250,7 @@ class KnxScanner:
             lambda: bus_con, remote_addr=(knx_gateway.host, knx_gateway.port))
         self.bus_protocols.append(bus_protocol)
 
-        # make sure the tunnel has been established
+        # Make sure the tunnel has been established
         connected = yield from future
         if connected:
             workers = [asyncio.Task(self.knx_bus_worker(transport, bus_protocol, queue), loop=self.loop)]
@@ -350,10 +335,9 @@ class KnxScanner:
                 yield from self.loop.create_datagram_endpoint(
                     lambda: description,
                     remote_addr=target)
+                # TODO: send description responses multiple time if there is no anser after a timeout
                 response = yield from future
                 if response:
-                    self.alive_targets.add(target)
-
                     t = KnxTargetReport(
                         host=target[0],
                         port=target[1],
@@ -378,7 +362,7 @@ class KnxScanner:
 
     @asyncio.coroutine
     def scan(self, targets=None, search_mode=False, search_timeout=5, iface=None,
-             bus_mode=False, bus_info=False, bus_monitor_mode=False, group_monitor_mode=False):
+             bus_targets=None, bus_info=False, bus_monitor_mode=False, group_monitor_mode=False):
         """The function that will be called by run_until_complete(). This is the main coroutine."""
         if targets:
             self.set_targets(targets)
@@ -413,9 +397,9 @@ class KnxScanner:
             for w in workers:
                 w.cancel()
 
-            if bus_mode and self.knx_gateways:
+            if bus_targets and self.knx_gateways:
                 self.bus_info = bus_info
-                bus_scanners = [asyncio.Task(self.bus_scan(g), loop=self.loop) for g in self.knx_gateways]
+                bus_scanners = [asyncio.Task(self.bus_scan(g, bus_targets), loop=self.loop) for g in self.knx_gateways]
                 yield from asyncio.wait(bus_scanners)
             else:
                 LOGGER.info('Scan took {} seconds'.format(self.t1 - self.t0))
