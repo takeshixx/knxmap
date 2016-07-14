@@ -2,8 +2,6 @@
 available devices."""
 import logging
 import asyncio
-import collections
-import struct
 
 from .messages import *
 from .core import *
@@ -156,8 +154,6 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                     LOGGER.info('{}/{}/{}: PROPERTY_VALUE_RESPONSE DATA: {}'.format(
                         self.peername[0], knx_source, knx_dest, knx_message.body.get('cemi').get('data')[4:]))
 
-                    #data = knx_message.body.get('cemi').get('data')[4:]
-
                     if knx_source in self.target_futures.keys():
                         if not self.target_futures[knx_source].done():
                             self.target_futures[knx_source].set_result(knx_message)
@@ -169,8 +165,6 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
 
                     LOGGER.info('{}/{}: MEMORY_RESPONSE DATA: {}'.format(
                         self.peername[0], knx_source, knx_message.body.get('cemi').get('data')))
-
-                    #data = knx_message.body.get('cemi').get('data')[2:]
 
                     if knx_source in self.target_futures.keys():
                         if not self.target_futures[knx_source].done():
@@ -350,18 +344,20 @@ class KnxBusMonitor(KnxTunnelConnection):
         """A generic message printing function. It defines a format for the monitoring modes."""
         assert isinstance(message, KnxTunnellingRequest)
         if self.group_monitor:
-            format = '[ chan_id: {}, seq_no: {}, message_code: {}, source_addr: {}, dest_addr: {}, tcpi: {}, apci: {} ]'.format(
-                message.body.get('communication_channel_id'),
-                message.body.get('sequence_counter'),
-                CEMI_PRIMITIVES[message.body.get('cemi').get('message_code')],
-                message.parse_knx_address(message.body.get('cemi').get('knx_source')),
-                message.parse_knx_group_address(message.body.get('cemi').get('knx_destination')),
-                message.body.get('cemi').get('tcpi'),
-                message.body.get('cemi').get('apci'))
+            format = '[ chan_id: {chan_id}, seq_no: {seq_no}, message_code: {msg_code}, \
+                        source_addr: {src_addr}, dest_addr: {dst_addr}, tcpi: {tcpi}, apci: {apci} ]'.format(
+                chan_id=message.body.get('communication_channel_id'),
+                seq_no=message.body.get('sequence_counter'),
+                msg_code=CEMI_PRIMITIVES[message.body.get('cemi').get('message_code')],
+                src_addr=message.parse_knx_address(message.body.get('cemi').get('knx_source')),
+                dst_addr=message.parse_knx_group_address(message.body.get('cemi').get('knx_destination')),
+                tcpi=message.body.get('cemi').get('tcpi'),
+                apci=message.body.get('cemi').get('apci'))
         else:
-            format = '[ chan_id: {}, seq_no: {}, message_code: {}, raw_frame: {} ]'.format(
-                message.body.get('communication_channel_id'),
-                message.body.get('sequence_counter'),
-                CEMI_PRIMITIVES[message.body.get('cemi').get('message_code')],
-                message.body.get('cemi').get('raw_frame'))
+            format = '[ chan_id: {chan_id}, seq_no: {seq_no}, message_code: {msg_code}, \
+                        raw_frame: {raw_frame} ]'.format(
+                chan_id=message.body.get('communication_channel_id'),
+                seq_no=message.body.get('sequence_counter'),
+                msg_code=CEMI_PRIMITIVES[message.body.get('cemi').get('message_code')],
+                raw_frame=message.body.get('cemi').get('raw_frame'))
         LOGGER.info(format)
