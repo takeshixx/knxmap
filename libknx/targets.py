@@ -6,6 +6,12 @@ import collections
 
 from .messages import *
 
+__all__ = ['Targets',
+           'KnxTargets',
+           'BusResultSet',
+           'KnxTargetReport',
+           'KnxBusTargetReport']
+
 LOGGER = logging.getLogger(__name__)
 
 class Targets:
@@ -134,3 +140,26 @@ class BusResultSet:
     def add(self, target):
         """Add a target to the result set, at the right position."""
         pass
+
+
+KnxTargetReport = collections.namedtuple(
+    'KnxTargetReport',
+    ['host',
+    'port',
+    'mac_address',
+    'knx_address',
+    'device_serial',
+    'friendly_name',
+    'device_status',
+    'knx_medium',
+    'project_install_identifier',
+    'supported_services',
+    'bus_devices'])
+
+
+KnxBusTargetReport = collections.namedtuple(
+    'KnxBusTargetReport',
+    ['address',
+    'type',
+     'device_serial',
+     'manufacturer'])

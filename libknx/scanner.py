@@ -21,32 +21,11 @@ from .messages import *
 from .gateway import *
 from .bus import *
 from .manufacturers import *
+from .targets import *
 
 __all__ = ['KnxScanner']
 
 LOGGER = logging.getLogger(__name__)
-
-KnxTargetReport = collections.namedtuple(
-    'KnxTargetReport',
-    ['host',
-    'port',
-    'mac_address',
-    'knx_address',
-    'device_serial',
-    'friendly_name',
-    'device_status',
-    'knx_medium',
-    'project_install_identifier',
-    'supported_services',
-    'bus_devices'])
-
-
-KnxBusTargetReport = collections.namedtuple(
-    'KnxBusTargetReport',
-    ['address',
-    'type',
-     'device_serial',
-     'manufacturer'])
 
 
 class KnxScanner:
@@ -355,10 +334,8 @@ class KnxScanner:
 
                     self.knx_gateways.append(t)
                 self.q.task_done()
-        except asyncio.CancelledError:
-            pass
-        except asyncio.QueueEmpty:
-            pass
+        except (asyncio.CancelledError, asyncio.QueueEmpty) as e:
+            LOGGER.exception(e)
 
     @asyncio.coroutine
     def scan(self, targets=None, search_mode=False, search_timeout=5, iface=None,
@@ -370,6 +347,7 @@ class KnxScanner:
         if search_mode:
             self.iface = iface
             self.search_timeout = search_timeout
+            LOGGER.info('Make sure there are no filtering rules that drop UDP multicast packets!')
             yield from self.search_gateways()
             for t in self.knx_gateways:
                 self.print_knx_target(t)
