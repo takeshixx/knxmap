@@ -1,4 +1,4 @@
-"""KNXnet/IP message implementations required bny knxmap."""
+"""KNXnet/IP message implementations required bny KNXmap."""
 import collections
 import io
 import logging
@@ -42,28 +42,28 @@ def parse_message(data):
         LOGGER.exception(e)
         return
 
-    if message_type == 0x0206:  # CONNECT_RESPONSE
+    if message_type == KNX_MESSAGE_TYPES.get('CONNECT_RESPONSE'):  # CONNECT_RESPONSE
         LOGGER.debug('Parsing KnxConnectResponse')
         return KnxConnectResponse(data)
-    elif message_type == 0x0420:  # TUNNELLING_REQUEST
+    elif message_type == KNX_MESSAGE_TYPES.get('TUNNELLING_REQUEST'):  # TUNNELLING_REQUEST
         return KnxTunnellingRequest(data)
-    elif message_type == 0x0421:  # TUNNELLING_ACK
+    elif message_type == KNX_MESSAGE_TYPES.get('TUNNELLING_ACK'):  # TUNNELLING_ACK
         LOGGER.debug('Parsing KnxTunnelingAck')
         return KnxTunnellingAck(data)
-    elif message_type == 0x0207: # CONNECTIONSTATE_REQUEST
+    elif message_type == KNX_MESSAGE_TYPES.get('CONNECTIONSTATE_REQUEST'): # CONNECTIONSTATE_REQUEST
         LOGGER.debug('Parsing KnxConnectionStateRequest')
         return KnxConnectionStateRequest(data)
-    elif message_type == 0x0208:  # CONNECTIONSTATE_RESPONSE
+    elif message_type == KNX_MESSAGE_TYPES.get('CONNECTIONSTATE_RESPONSE'):  # CONNECTIONSTATE_RESPONSE
         LOGGER.debug('Parsing KnxConnectionStateResponse')
         return KnxConnectionStateResponse(data)
-    elif message_type == 0x0209:  # DISCONNECT_REQUEST
+    elif message_type == KNX_MESSAGE_TYPES.get('DISCONNECT_REQUEST'):  # DISCONNECT_REQUEST
         LOGGER.debug('Parsing KnxDisconnectRequest')
         return KnxDisconnectRequest(data)
-    elif message_type == 0x020a:  # DISCONNECT_RESPONSE
+    elif message_type == KNX_MESSAGE_TYPES.get('DISCONNECT_RESPONSE'):  # DISCONNECT_RESPONSE
         LOGGER.debug('Parsing KnxDisconnectResponse')
         return KnxDisconnectResponse(data)
     else:
-        LOGGER.error('Unknown message type: '.format(message_type))
+        LOGGER.error('Unknown message type: {}'.format(message_type))
         return None
 
 
@@ -805,7 +805,9 @@ class KnxTunnellingRequest(KnxMessage):
         npdu |= read_count << 0 # number of octets to be read/write
         cemi += struct.pack('!H', npdu)
 
-        # 0x0060 -> 0x00
+        # 0x0060 -> run state
+        # 0x0104 -> manufacturer id
+        # 0x010d -> run error
         # 0xb6ec -> 0x01
         # 0xb6ed -> 0x01
         # 0xb6ea -> 0x01
