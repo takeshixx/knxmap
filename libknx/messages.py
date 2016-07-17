@@ -20,7 +20,9 @@ __all__ = ['parse_message',
            'KnxConnectionStateRequest',
            'KnxConnectionStateResponse',
            'KnxDisconnectRequest',
-           'KnxDisconnectResponse']
+           'KnxDisconnectResponse',
+           'KnxDeviceConfigurationRequest',
+           'KnxDeviceConfigurationAck']
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,26 +44,32 @@ def parse_message(data):
         LOGGER.exception(e)
         return
 
-    if message_type == KNX_MESSAGE_TYPES.get('CONNECT_RESPONSE'):  # CONNECT_RESPONSE
+    if message_type == KNX_MESSAGE_TYPES.get('CONNECT_RESPONSE'):
         LOGGER.debug('Parsing KnxConnectResponse')
         return KnxConnectResponse(data)
-    elif message_type == KNX_MESSAGE_TYPES.get('TUNNELLING_REQUEST'):  # TUNNELLING_REQUEST
+    elif message_type == KNX_MESSAGE_TYPES.get('TUNNELLING_REQUEST'):
         return KnxTunnellingRequest(data)
-    elif message_type == KNX_MESSAGE_TYPES.get('TUNNELLING_ACK'):  # TUNNELLING_ACK
+    elif message_type == KNX_MESSAGE_TYPES.get('TUNNELLING_ACK'):
         LOGGER.debug('Parsing KnxTunnelingAck')
         return KnxTunnellingAck(data)
-    elif message_type == KNX_MESSAGE_TYPES.get('CONNECTIONSTATE_REQUEST'): # CONNECTIONSTATE_REQUEST
+    elif message_type == KNX_MESSAGE_TYPES.get('CONNECTIONSTATE_REQUEST'):
         LOGGER.debug('Parsing KnxConnectionStateRequest')
         return KnxConnectionStateRequest(data)
-    elif message_type == KNX_MESSAGE_TYPES.get('CONNECTIONSTATE_RESPONSE'):  # CONNECTIONSTATE_RESPONSE
+    elif message_type == KNX_MESSAGE_TYPES.get('CONNECTIONSTATE_RESPONSE'):
         LOGGER.debug('Parsing KnxConnectionStateResponse')
         return KnxConnectionStateResponse(data)
-    elif message_type == KNX_MESSAGE_TYPES.get('DISCONNECT_REQUEST'):  # DISCONNECT_REQUEST
+    elif message_type == KNX_MESSAGE_TYPES.get('DISCONNECT_REQUEST'):
         LOGGER.debug('Parsing KnxDisconnectRequest')
         return KnxDisconnectRequest(data)
-    elif message_type == KNX_MESSAGE_TYPES.get('DISCONNECT_RESPONSE'):  # DISCONNECT_RESPONSE
+    elif message_type == KNX_MESSAGE_TYPES.get('DISCONNECT_RESPONSE'):
         LOGGER.debug('Parsing KnxDisconnectResponse')
         return KnxDisconnectResponse(data)
+    elif message_type == KNX_MESSAGE_TYPES.get('DEVICE_CONFIGURATION_REQUEST'):
+        LOGGER.debug('Parsing KnxDeviceConfigurationRequest')
+        return KnxDeviceConfigurationRequest(data)
+    elif message_type == KNX_MESSAGE_TYPES.get('DEVICE_CONFIGURATION_RESPONSE'):
+        LOGGER.debug('Parsing KnxDeviceConfigurationAck')
+        return KnxDeviceConfigurationAck(data)
     else:
         LOGGER.error('Unknown message type: {}'.format(message_type))
         return None
@@ -576,14 +584,24 @@ class KnxConnectRequest(KnxMessage):
         0x07: 'REMCONF_CONNECTION',
         0x08: 'OBJSVR_CONNECTION',
         0x80: 'TUNNEL_BUSMONITOR'}
+    _layer_types = {
+        'TUNNEL_LINKLAYER': 0x02,
+        'DEVICE_MGMT_CONNECTION': 0x03,
+        'TUNNEL_RAW': 0x04,
+        'REMLOG_CONNECTION': 0x06,
+        'REMCONF_CONNECTION': 0x07,
+        'OBJSVR_CONNECTION': 0x08,
+        'TUNNEL_BUSMONITOR': 0x80}
 
-    def __init__(self, message=None, sockname=None, layer_type=0x02):
+    def __init__(self, message=None, sockname=None, layer_type='TUNNEL_LINKLAYER',
+                 connection_type=0x04):
         super(KnxConnectRequest, self).__init__()
         if message:
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = KNX_MESSAGE_TYPES.get('CONNECT_REQUEST')
-            self.layer_type = layer_type
+            self.connection_type = connection_type
+            self.layer_type = self._layer_types.get(layer_type)
             try:
                 self.source, self.port = sockname
                 self.pack_knx_message()
@@ -597,10 +615,14 @@ class KnxConnectRequest(KnxMessage):
         # Data endpoint
         self.body += self._pack_hpai()
         # Connection request information
-        self.body += struct.pack('!B', 4)  # structure_length
-        self.body += struct.pack('!B', 0x04)  # connection type # TODO: implement other connections (routing, object server)
-        self.body += struct.pack('!B', self.layer_type)  # knx layer type
-        self.body += struct.pack('!B', 0x00)  # reserved
+        if self.connection_type == 0x04:
+            self.body += struct.pack('!B', 4)  # structure_length
+        else:
+            self.body += struct.pack('!B', 2)  # structure_length
+        self.body += struct.pack('!B', self.connection_type)  # connection type # TODO: implement other connections (routing, object server)
+        if self.connection_type == 0x04:
+            self.body += struct.pack('!B', self.layer_type)  # knx layer type
+            self.body += struct.pack('!B', 0x00)  # reserved
         return self.body
 
     def _unpack_knx_body(self, message):
@@ -652,7 +674,8 @@ class KnxConnectResponse(KnxMessage):
             self.body['data_block'] = dict()
             self.body['data_block']['structure_length'] = self._unpack_stream('!B', message)
             self.body['data_block']['connection_type'] = self._unpack_stream('!B', message)
-            self.body['data_block']['knx_address'] = self.parse_knx_address(self._unpack_stream('!H', message))
+            if self.body['data_block']['connection_type'] == 0x04:
+                self.body['data_block']['knx_address'] = self.parse_knx_address(self._unpack_stream('!H', message))
         except Exception as e:
             LOGGER.exception(e)
 
@@ -707,10 +730,9 @@ class KnxTunnellingRequest(KnxMessage):
         except Exception as e:
             LOGGER.exception(e)
 
-    def unnumbered_control_data(self, ucd_type):
-        TYPES = {
-            'CONNECT': 0x00,
-            'DISCONNECT': 0x01}
+    def tpci_unnumbered_control_data(self, ucd_type):
+        TYPES = {'CONNECT': 0x00,
+                 'DISCONNECT': 0x01}
         assert ucd_type in TYPES.keys(), 'Invalid UCD type: {}'.format(ucd_type)
         cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 0) # Data length
@@ -720,10 +742,9 @@ class KnxTunnellingRequest(KnxMessage):
         self._pack_knx_body(cemi)
         self.pack_knx_message()
 
-    def numbered_control_data(self, ncd_type, sequence=0):
-        TYPES = {
-            'ACK': 0x02,
-            'NACK': 0x03}
+    def tpci_numbered_control_data(self, ncd_type, sequence=0):
+        TYPES = {'ACK': 0x02,
+                 'NACK': 0x03}
         assert ncd_type in TYPES.keys(), 'Invalid NCD type: {}'.format(ncd_type)
         cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 0)  # Data length
@@ -734,7 +755,7 @@ class KnxTunnellingRequest(KnxMessage):
         self._pack_knx_body(cemi)
         self.pack_knx_message()
 
-    def a_device_descriptor_read(self, sequence=0):
+    def apci_device_descriptor_read(self, sequence=0):
         cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 1) # Data length
         npdu = TPCI_TYPES.get('NDP') << 14
@@ -744,7 +765,17 @@ class KnxTunnellingRequest(KnxMessage):
         self._pack_knx_body(cemi)
         self.pack_knx_message()
 
-    def a_authorize_request(self, sequence=0, key=0xffffffff):
+    def apci_individual_address_read(self, sequence=0):
+        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 1) # Data length
+        npdu = TPCI_TYPES.get('NDP') << 14
+        npdu |= sequence << 10
+        npdu |= APCI_TYPES['A_IndividualAddress_Read'] << 0
+        cemi += struct.pack('!H', npdu)
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def apci_authorize_request(self, sequence=0, key=0xffffffff):
         cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 6)  # Data length
         npdu = TPCI_TYPES.get('NDP') << 14
@@ -756,65 +787,136 @@ class KnxTunnellingRequest(KnxMessage):
         self._pack_knx_body(cemi)
         self.pack_knx_message()
 
-    def a_property_value_read(self, sequence=0, object_index=0, property_id=0x0f,
-                              num_elements=1, start_index=1):
+    def apci_property_value_read(self, sequence=0, object_index=0, property_id=0x0f,
+                                 num_elements=1, start_index=0):
+        """A_PropertyValue_Read
+
+        object index: 0x00, property id: 0x0f -> order number
+        object index: 0x00, property id: 0x0b -> serial number
+        object index: 0x03, property id: 0x0d -> application programm, ABB A021 v2.0, 0002a02120
+        object index: 0x03, property id: 0x06 -> 0x01
+        object index: 0x04, property id: 0x0d -> -
+        object index: 0x04, property id: 0x06 -> -
+        """
         cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 5) # Data length
         npdu = TPCI_TYPES.get('NDP') << 14
         npdu |= sequence << 10
         npdu |= APCI_TYPES['A_PropertyValue_Read'] << 0
         cemi += struct.pack('!H', npdu)
-
-        # object index: 0x00, property id: 0x0f -> order number
-        # object index: 0x00, property id: 0x0b -> serial number
-        # object index: 0x03, property id: 0x0d -> application programm, ABB A021 v2.0, 0002a02120
-        # object index: 0x03, property id: 0x06 -> 0x01
-        # object index: 0x04, property id: 0x0d -> -
-        # object index: 0x04, property id: 0x06 -> -
-
         cemi += struct.pack('!B', object_index) # object index
         cemi += struct.pack('!B', property_id) # property id
         count_index = num_elements << 12
         count_index |= start_index << 0
         cemi += struct.pack('!H', count_index) # number of elements + start index
-
         self._pack_knx_body(cemi)
         self.pack_knx_message()
 
-    def a_adc_read(self, sequence=0):
+    def apci_property_description_read(self, sequence=0, object_index=0, property_id=0x0f,
+                                       num_elements=1, start_index=0):
+        """A_PropertyDescription_Read"""
+        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 5)  # Data length
+        npdu = TPCI_TYPES.get('NDP') << 14
+        npdu |= sequence << 10
+        npdu |= APCI_TYPES['A_PropertyDescription_Read'] << 0
+        cemi += struct.pack('!H', npdu)
+        cemi += struct.pack('!B', object_index)  # object index
+        cemi += struct.pack('!B', property_id)  # property id
+        count_index = num_elements << 12
+        count_index |= start_index << 0
+        cemi += struct.pack('!H', count_index)  # number of elements + start index
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def apci_adc_read(self, sequence=0):
+        """A_ADC_Read"""
         cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 2) # Data length
         npdu = TPCI_TYPES.get('NDP') << 14
         npdu |= sequence << 10
         npdu |= APCI_TYPES['A_ADC_Read'] << 0
-
         npdu |= 1 << 0 # channel nr
-
         cemi += struct.pack('!H', npdu)
         cemi += struct.pack('!B', 0x08)  # data
-
         self._pack_knx_body(cemi)
         self.pack_knx_message()
 
-    def a_memory_read(self, sequence=0, memory_address=0x0060, read_count=1):
+    def apci_memory_read(self, sequence=0, memory_address=0x0060, read_count=1):
+        """A_Memory_Read
+
+        0x0060 -> run state
+
+              Bit  |
+             ------+---------------------------------------------------------------
+               7   | Parity
+                   | Even parity for bit 0-6
+             ------+---------------------------------------------------------------
+               6   | DM
+                   | BCU in download mode
+             ------+---------------------------------------------------------------
+               5   | UE
+                   | User application running
+             ------+---------------------------------------------------------------
+               4   | SE
+                   | Serial interface active
+             ------+---------------------------------------------------------------
+               3   | ALE
+                   | Application layer active
+             ------+---------------------------------------------------------------
+               2   | TLE
+                   | Transport layer active
+             ------+---------------------------------------------------------------
+               1   | LLM
+                   | Link layer active
+             ------+---------------------------------------------------------------
+               0   | PROG
+                   | Device is in programming mode
+             ------+---------------------------------------------------------------
+
+        0x010d  -> run error
+
+              Bit  |
+             ------+---------------------------------------------------------------
+               7   | Unknown
+                   |
+             ------+---------------------------------------------------------------
+               6   | SYS3_ERR (internal system failure)
+                   | Memory control block broken
+             ------+---------------------------------------------------------------
+               5   | SYS2_ERR (internal system failure)
+                   | Temperature
+             ------+---------------------------------------------------------------
+               4   | OBJ_ERR
+                   | RAM flag failure
+             ------+---------------------------------------------------------------
+               3   | STK_OVL
+                   | Stack overload
+             ------+---------------------------------------------------------------
+               2   | EEPROM_ERR
+                   | EEPROM encountered checksum error
+             ------+---------------------------------------------------------------
+               1   | SYS1_ERR (internal system failure)
+                   | Wrong parity bit
+             ------+---------------------------------------------------------------
+               0   | SYS0_ERR (internal system failure)
+                   | Message buffer offset broken
+             ------+---------------------------------------------------------------
+
+        0x0104 -> manufacturer id
+        0xb6ec -> 0x01
+        0xb6ed -> 0x01
+        0xb6ea -> 0x01
+        0xb6eb -> 0x01
+        """
         cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 3) # Data length
         npdu = TPCI_TYPES.get('NDP') << 14
         npdu |= sequence << 10
         npdu |= APCI_TYPES['A_Memory_Read'] << 4
-        npdu |= read_count << 0 # number of octets to be read/write
+        npdu |= read_count << 0 # number of octets to read/write
         cemi += struct.pack('!H', npdu)
-
-        # 0x0060 -> run state
-        # 0x0104 -> manufacturer id
-        # 0x010d -> run error
-        # 0xb6ec -> 0x01
-        # 0xb6ed -> 0x01
-        # 0xb6ea -> 0x01
-        # 0xb6eb -> 0x01
-
         cemi += struct.pack('!H', memory_address)  # memory address
-
         self._pack_knx_body(cemi)
         self.pack_knx_message()
 
@@ -920,7 +1022,7 @@ class KnxDisconnectRequest(KnxMessage):
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = KNX_MESSAGE_TYPES.get('DISCONNECT_REQUEST')
-            self.communication_channel = communication_channel
+            self.communication_channel = communication_channel or 0
             try:
                 self.source, self.port = sockname
                 self.pack_knx_message()
@@ -976,8 +1078,7 @@ class KnxDisconnectResponse(KnxMessage):
 class KnxDeviceConfigurationRequest(KnxMessage):
 
     def __init__(self, message=None, sockname=None, communication_channel=None,
-                 knx_source=None, knx_destination=None, sequence_count=0, message_code=0x11,
-                 cemi_ndpu_len=1):
+                 sequence_count=0, message_code=0xfc, cemi_ndpu_len=1):
         super(KnxDeviceConfigurationRequest, self).__init__()
         if message:
             self.unpack_knx_message(message)
@@ -986,13 +1087,7 @@ class KnxDeviceConfigurationRequest(KnxMessage):
             self.communication_channel = communication_channel
             self.sequence_count = sequence_count
             self.cemi_message_code = message_code
-            if knx_source:
-                self.knx_source = self.pack_knx_address(knx_source)
-            if knx_destination:
-                self.set_knx_destination(knx_destination)
-
             self.cemi_npdu_len = 0
-
             try:
                 self.source, self.port = sockname
                 self.pack_knx_message()
@@ -1006,10 +1101,24 @@ class KnxDeviceConfigurationRequest(KnxMessage):
         self.body += struct.pack('!B', self.sequence_count) # sequence counter
         self.body += struct.pack('!B', 0) # reserved
         # cEMI
-        if cemi:
-            self.body += cemi
-        else:
-            self.body += self._pack_cemi()
+        #if cemi:
+        #    self.body += cemi
+        #else:
+        #    self.body += self._pack_cemi()
+
+        self.body += struct.pack('!B', self.cemi_message_code) # M_PropRead.req
+        #self.body += struct.pack('!B', CEMI_MESSAGE_CODES.get('L_Data.req'))
+        self.body += struct.pack('!H', 11)
+        self.body += struct.pack('!B', 11)
+        self.body += struct.pack('!B', PARAMETER_OBJECTS.get('PID_ADDITIONAL_INDIVIDUAL_ADDRESSES'))
+        #self.body += struct.pack('!B', DEVICE_OBJECTS.get('PID_SERIAL_NUMBER'))
+        #self.body += struct.pack('!H', 0x1001)
+        self.body += struct.pack('!B', 0x10)
+        self.body += struct.pack('!B', 0x00)
+
+        print("body")
+        print(self.body)
+
         return self.body
 
     def _unpack_knx_body(self, message):
@@ -1020,7 +1129,8 @@ class KnxDeviceConfigurationRequest(KnxMessage):
             self.body['sequence_counter'] = self._unpack_stream('!B', message)
             self.body['reserved'] = self._unpack_stream('!B', message)
             # cEMI
-            self.body['cemi'] = self._unpack_cemi(message)
+            #self.body['cemi'] = self._unpack_cemi(message)
+            self.body['the_end'] = message.read()
         except Exception as e:
             LOGGER.exception(e)
 
