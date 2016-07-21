@@ -179,67 +179,6 @@ class KnxScanner:
                             if isinstance(serial, (str, bytes)):
                                 serial = codecs.encode(serial, 'hex').decode().upper()
 
-                        # DEV
-
-                        # PropertyValueRead
-                        tunnel_request = protocol.make_tunnel_request(target)
-                        tunnel_request.apci_property_value_read(
-                            sequence=protocol.tpci_sequence_count,
-                            object_index=2,
-                            num_elements=1,
-                            start_index=0,
-                            property_id=52)
-                        additional = yield from protocol.send_data(tunnel_request.get_message(), target)
-                        print("ADDITIONAL ADDRESSES")
-                        print(additional)
-                        if not isinstance(additional, bool):
-                            print(additional.body)
-
-                        # NCD
-                        ret = yield from protocol.tpci_send_ncd(target)
-
-                        if not ret:
-                            serial = 'COULD NOT READ ADDITIONAL INDIVIDUAL ADDRESSES'
-                        # else:
-                        #     if isinstance(serial, (str, bytes)):
-                        #         serial = codecs.encode(serial, 'hex').decode().upper()
-
-
-                        # Memory read device state
-                        tunnel_request = protocol.make_tunnel_request(target)
-                        tunnel_request.apci_memory_read(
-                            sequence=protocol.tpci_sequence_count,
-                            memory_address=0x0060,
-                            read_count=1)
-                        run_state = yield from protocol.send_data(tunnel_request.get_message(), target)
-                        yield from protocol.tpci_send_ncd(target)
-                        if run_state:
-                            run_state = run_state.body.get('cemi').get('data')[2:]
-
-                        print("RUN STATE")
-                        print(run_state)
-
-                        for obj in range(1,20):
-                            for prop in range(1,150):
-                                tunnel_request = protocol.make_tunnel_request(target)
-                                tunnel_request.apci_property_value_read(
-                                    sequence=protocol.tpci_sequence_count,
-                                    object_index=obj,
-                                    start_index=1,
-                                    property_id=prop)
-                                prop_ret = yield from protocol.send_data(tunnel_request.get_message(), target)
-                                if not isinstance(prop_ret, bool):
-                                    print("--- obj: {}, prop: {}".format(obj, prop))
-                                    if prop_ret.body:
-                                        #print(prop_ret.body)
-                                        print("property data: {}".format(prop_ret.body.get('cemi').get('data')[2:]))
-                                    print("---")
-                                else:
-                                    LOGGER.debug('unknown response for obj: {}, prop: {}'.format(obj, prop))
-
-                                # NCD
-                                ret = yield from protocol.tpci_send_ncd(target)
-
                     if descriptor:
                         t = KnxBusTargetReport(
                             address=target,
@@ -261,25 +200,6 @@ class KnxScanner:
     def bus_scan(self, knx_gateway, bus_targets):
         queue = self.add_bus_queue(knx_gateway.host, bus_targets)
         LOGGER.info('Scanning {} bus device(s) on {}'.format(queue.qsize(), knx_gateway.host))
-
-        # DEV: test configuration request
-        # future = asyncio.Future()
-        # bus_con = KnxTunnelConnection(future, connection_type=0x03) # DEVICE_MGMT_CONNECTION
-        # transport, bus_protocol = yield from self.loop.create_datagram_endpoint(
-        #     lambda: bus_con, remote_addr=(knx_gateway.host, knx_gateway.port))
-        # self.bus_protocols.append(bus_protocol)
-        #
-        # connected = yield from future
-        # if connected:
-        #     conf_req = bus_protocol.make_configuration_request()
-        #     print("bla")
-        #     print(conf_req)
-        #     bla = conf_req.get_message()
-        #     print(bla)
-        #     print("blubb")
-        #     resp = yield from bus_protocol.send_data(conf_req.get_message())
-        #     LOGGER.info('CONFIGURATION RESPONSE')
-        #     print(resp)
 
         future = asyncio.Future()
         bus_con = KnxTunnelConnection(future)
