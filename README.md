@@ -6,19 +6,23 @@ A tool for scanning and auditing KNXnet/IP gateways on IP driven networks. In ad
 
 KNXmap is based on the [asyncio](https://docs.python.org/3/library/asyncio.html) module which is available for Python 3.3 and newer. Users of Python 3.3 must install `asyncio` from [PyPI](https://pypi.python.org/pypi), Python 3.4 ships it in the standard library by default. Therefore KNXmap requires Python 3.3 or any newer version of Python.
 
-## KNXnet/IP
+## KNX
 
-KNXnet/IP is a standard that defines IP as a medium for [KNX](https://www.knx.org/knx-en/index.php) related communication. It basically allows administrators to administrate KNX devices via IP driven networks.
+KNX is a standardized (EN 50090, ISO/IEC 14543), OSI-based network communications protocol for building automation. KNX is the successor to, and convergence of, three previous standards: the European Home Systems Protocol (EHS), BatiBUS, and the European Installation Bus (EIB or Instabus). The KNX standard is administered by the [KNX Association](https://www.knx.org/knx-en/index.php). ([Source](https://en.wikipedia.org/wiki/KNX_\(standard\)))
 
-Unfourtunately the standard is properitary which makes it impossible to be included in this repository.
+### KNXnet/IP
+
+KNXnet/IP defines Ethernet as physical communication media. It basically allows administrators to manage KNX bus devices via IP driven networks.
+
+**Note**: Unfourtunately the standard is proprietary which makes it impossible to be included in this repository.
 
 ## Scanning Modes
 
 KNXmap supports three different scanning modes:
 
+* Identifying KNX gateways via unicast discovery messages (default scan mode)
+* Scan for bus devices attached to KNX gateways (with optional device fingerprinting)
 * Searching KNX gateways via multicast messages (with `--search`)
-* Identifying KNX gateways with discovery messages (default scan mode)
-* Scan for bus devices attached to KNX gateways
 
 ### Discovery Mode
 
@@ -48,7 +52,7 @@ knxmap.py --bus-targets 1.0.0-1.1.255 192.168.1.100
 
 The default mode is to only check if sending messages to a address returns an error or not. This helps to identify potential devices and alive targets.
 
-#### Bus Device Information
+#### Bus Device Fingerprinting
 
 In addition to the default bus scanning KNXmap can also extract basic information from devices for further identification by supplying the `--bus-info` argument:
 
@@ -64,7 +68,7 @@ KNX supports finding devices by sending multicast packets that should be answere
 sudo knxmap.py --search --interface eth1
 ```
 
-**Note**: Packet filtering rules might block the response packets. If there are no KNXnet/IP gateways answering their packets might be dropped by iptables rules.
+**Note**: Packet filtering rules might block the response packets. If there are no KNXnet/IP gateways answering their packets might be dropped by netfilter/iptables rules.
 
 ## Monitoring Modes
 
@@ -73,10 +77,13 @@ KNXmap supports two different monitoring modes:
 * Bus monitoring (`--bus-monitor`) prints the raw messages received from the KNX bus.
 * Group monitoring (`--group-monitor`) prints all group messages received from the KNX bus.
 
+These monitoring modes can be useful for debugging communication on the bus. Additionally, they can be used for passive information gathering which allows to identify bus devices without sending messages to any individual or group address. Especially motion sensors or other devices that frequently send messages to the bus can easily be identified via bus monitoring.
+
 ## TODO
  
-- Implement KNXnet/IP Routing (bus.py)
-- Implement ObjectServer (TCP and/or UDP?) (objectserver.py)
+* Implement KNXnet/IP Routing (bus.py)
+    * KNXnet/IP router device required (not available yet)
+* Implement [KNX ObjectServer protocol](http://www.weinzierl.de/images/download/products/770/KNX_BAOS_Protocol.pdf) (objectserver.py)
 
 ## Hacking
 
