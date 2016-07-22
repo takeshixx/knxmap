@@ -29,15 +29,9 @@ class KnxGatewaySearch(asyncio.DatagramProtocol):
                 KNX_CONSTANTS.get('DEFAULT_PORT')))
 
     def datagram_received(self, data, addr):
-        try:
-            LOGGER.debug('Parsing KnxSearchResponse')
-            response = KnxSearchResponse(data)
-            if response:
-                self.responses.add((addr, response))
-            else:
-                LOGGER.debug('Not a valid search response!')
-        except Exception as e:
-            LOGGER.exception(e)
+        knx_message = parse_message(data)
+        if knx_message and isinstance(knx_message, KnxSearchResponse):
+            self.responses.add((addr, knx_message))
 
 
 class KnxGatewayDescription(asyncio.DatagramProtocol):
@@ -46,7 +40,6 @@ class KnxGatewayDescription(asyncio.DatagramProtocol):
         self.future = future
         self.loop = loop or asyncio.get_event_loop()
         self.transport = None
-        self.response = None
         self.timeout = timeout
 
     def connection_made(self, transport):
@@ -58,27 +51,14 @@ class KnxGatewayDescription(asyncio.DatagramProtocol):
         self.transport.sendto(packet.get_message())
 
     def connection_timeout(self):
-        LOGGER.debug('Description timeout')
         self.transport.close()
         self.future.set_result(False)
 
     def datagram_received(self, data, addr):
         self.wait.cancel()
         self.transport.close()
-        try:
-            LOGGER.debug('Parsing KnxDescriptionResponse')
-            self.response = KnxDescriptionResponse(data)
-            if self.response:
-                self.future.set_result(self.response)
-            else:
-                LOGGER.debug('Not a valid description response!')
-                self.future.set_result(False)
-        except Exception as e:
-            LOGGER.exception(e)
-
-
-class KnxDeviceConfigurationConnection(asyncio.DatagramProtocol):
-    # TODO: implement device configuration connection
-
-    def __init__(self):
-        pass
+        knx_message = parse_message(data)
+        if knx_message and isinstance(knx_message, KnxDescriptionResponse):
+            self.future.set_result(knx_message)
+        else:
+            self.future.set_result(False)
