@@ -44,7 +44,13 @@ def parse_message(data):
         LOGGER.exception(e)
         return
 
-    if message_type == KNX_MESSAGE_TYPES.get('CONNECT_RESPONSE'):
+    if message_type == KNX_MESSAGE_TYPES.get('SEARCH_RESPONSE'):
+        LOGGER.debug('Parsing KnxSearchResponse')
+        return KnxSearchResponse(data)
+    elif message_type == KNX_MESSAGE_TYPES.get('DESCRIPTION_RESPONSE'):
+        LOGGER.debug('Parsing KnxDescriptionResponse')
+        return KnxDescriptionResponse(data)
+    elif message_type == KNX_MESSAGE_TYPES.get('CONNECT_RESPONSE'):
         LOGGER.debug('Parsing KnxConnectResponse')
         return KnxConnectResponse(data)
     elif message_type == KNX_MESSAGE_TYPES.get('TUNNELLING_REQUEST'):
