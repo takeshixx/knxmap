@@ -334,7 +334,6 @@ class KnxScanner:
                 for response in protocol.responses:
                     peer = response[0]
                     response = response[1]
-
                     t = KnxTargetReport(
                         host=peer[0],
                         port=peer[1],
@@ -368,14 +367,18 @@ class KnxScanner:
             while True:
                 target = self.q.get_nowait()
                 LOGGER.debug('Scanning {}'.format(target))
-                future = asyncio.Future()
-                description = KnxGatewayDescription(future)
-                yield from self.loop.create_datagram_endpoint(
-                    lambda: description,
-                    remote_addr=target)
-                # TODO: send description responses multiple time if there is no anser after a timeout
-                response = yield from future
-                if response:
+                for _try in range(self.desc_retries):
+                    LOGGER.debug('Sending {}. KnxDescriptionRequest to {}'.format(_try, target))
+                    future = asyncio.Future()
+                    description = KnxGatewayDescription(future,
+                                                        timeout=self.desc_timeout)
+                    yield from self.loop.create_datagram_endpoint(lambda: description,
+                                                                  remote_addr=target)
+                    response = yield from future
+                    if response:
+                        break
+
+                if response and isinstance(response, KnxDescriptionResponse):
                     t = KnxTargetReport(
                         host=target[0],
                         port=target[1],
@@ -398,7 +401,8 @@ class KnxScanner:
 
     @asyncio.coroutine
     def scan(self, targets=None, search_mode=False, search_timeout=5, iface=None,
-             bus_targets=None, bus_info=False, bus_monitor_mode=False, group_monitor_mode=False):
+             desc_timeout=2, desc_retries=2, bus_targets=None, bus_info=False,
+             bus_monitor_mode=False, group_monitor_mode=False):
         """The function that will be called by run_until_complete(). This is the main coroutine."""
         if targets:
             self.set_targets(targets)
@@ -410,7 +414,6 @@ class KnxScanner:
             yield from self.search_gateways()
             for t in self.knx_gateways:
                 self.print_knx_target(t)
-
             LOGGER.info('Searching done')
 
         elif bus_monitor_mode or group_monitor_mode:
@@ -421,10 +424,11 @@ class KnxScanner:
                 lambda: bus_con,
                 remote_addr=list(self.targets)[0])
             yield from future
-
             LOGGER.info('Stopping bus monitor')
 
         else:
+            self.desc_timeout = desc_timeout
+            self.desc_retries = desc_retries
             workers = [asyncio.Task(self.knx_description_worker(), loop=self.loop)
                        for _ in range(self.max_workers if len(self.targets) > self.max_workers else len(self.targets))]
 
@@ -451,13 +455,12 @@ class KnxScanner:
         out = dict()
         out[knx_target.host] = collections.OrderedDict()
         o = out[knx_target.host]
-
         o['Port'] = knx_target.port
         o['MAC Address'] = knx_target.mac_address
         o['KNX Bus Address'] = knx_target.knx_address
         o['KNX Device Serial'] = knx_target.device_serial
         o['KNX Medium'] = KNX_MEDIUMS.get(knx_target.knx_medium)
-        o['Device Friendly Name'] = binascii.b2a_qp(knx_target.friendly_name.strip())
+        o['Device Friendly Name'] = binascii.b2a_qp(knx_target.friendly_name.strip().replace(b'\x00', b''))
         o['Device Status'] = knx_target.device_status
         o['Project Install Identifier'] = knx_target.project_install_identifier
         o['Supported Services'] = knx_target.supported_services
@@ -475,7 +478,6 @@ class KnxScanner:
                 o['Bus Devices'].append(_d)
 
         print()
-
         def print_fmt(d, indent=0):
             for key, value in d.items():
                 if indent is 0:
