@@ -20,7 +20,7 @@ setup(
     packages=['libknx'],
     install_requires=install_require,
     url='https://github.com/takeshixx/knxmap',
-    license='',
+    license='GNU GPLv3',
     author='takeshix',
     author_email='takeshix@adversec.com',
     description='Network and bus scanner for KNX devices')
