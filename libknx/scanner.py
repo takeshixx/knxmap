@@ -460,7 +460,7 @@ class KnxScanner:
         o['KNX Bus Address'] = knx_target.knx_address
         o['KNX Device Serial'] = knx_target.device_serial
         o['KNX Medium'] = KNX_MEDIUMS.get(knx_target.knx_medium)
-        o['Device Friendly Name'] = binascii.b2a_qp(knx_target.friendly_name.strip().replace(b'\x00', b''))
+        o['Device Friendly Name'] = binascii.b2a_qp(knx_target.friendly_name.strip().replace(b'\x00', b'')).decode()
         o['Device Status'] = knx_target.device_status
         o['Project Install Identifier'] = knx_target.project_install_identifier
         o['Supported Services'] = knx_target.supported_services
