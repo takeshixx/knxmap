@@ -53,7 +53,7 @@ ARGS.add_argument(
     default=2, help='Timeout in seconds for unicast description responses')
 ARGS.add_argument(
     '--desc-retries', action='store', dest='desc_retries', type=int,
-    default=2, help='Count of retries for description requests')
+    default=3, help='Count of retries for description requests')
 # Bus options
 ARGS.add_argument(
     '--bus-targets', action='store', dest='bus_targets',
