@@ -135,6 +135,8 @@ CEMI_PRIMITIVES = {
     0x2f: 'L_Raw.con',
     0xfb: 'M_PropRead.con',
     0xfc: 'M_PropRead.req'}
+    #: 'M_FuncPropCommand.req',
+    #: 'M_FuncPropStateRead.req'}
 
 
 CEMI_MESSAGE_CODES = {
