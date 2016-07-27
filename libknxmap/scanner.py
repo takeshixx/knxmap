@@ -157,7 +157,8 @@ class KnxScanner:
                             memory_address=0x0104,
                             read_count=4)
                         application_program = yield from protocol.send_data(tunnel_request.get_message(), target)
-                        application_program = application_program.body.get('cemi').get('data')[2:]
+                        if not isinstance(application_program, bool):
+                            application_program = application_program.body.get('cemi').get('data')[2:]
                         yield from protocol.tpci_send_ncd(target)
 
                     if dev_desc > 0x13:
