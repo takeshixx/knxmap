@@ -4,7 +4,7 @@ import os
 import argparse
 import logging
 
-from libknx import KnxScanner, Targets, KnxTargets
+from libknxmap import KnxScanner, Targets, KnxTargets
 
 # asyncio requires at least Python 3.3
 if sys.version_info.major < 3 or \
@@ -26,7 +26,7 @@ LOGGER = logging.getLogger(__name__)
 # TODO: add subcommands for scanning modes?
 # TODO: add dump-file argument for monitoring modes
 # TODO: implement key bruteforcing for authorization request PINs
-ARGS = argparse.ArgumentParser(description="KNXnet/IP Scanner")
+ARGS = argparse.ArgumentParser(description="KNXnet/IP network and bus mapper")
 # General options
 ARGS.add_argument(
     'targets', nargs='*',
