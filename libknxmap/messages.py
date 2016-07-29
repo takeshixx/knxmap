@@ -446,7 +446,7 @@ class KnxMessage(object):
             tpci_unpacked['apci'] |= ((tpci[0] >> 0) & 1) << 2
             tpci_unpacked['apci'] |= ((tpci[0] >> 1) & 1) << 3
 
-            if tpci_unpacked['apci'] in APCI_TYPES.values():
+            if tpci_unpacked['apci'] in CEMI_APCI_TYPES.values():
                 tpci_unpacked['apci_data'] = 0
                 tpci_unpacked['apci_data'] |= ((tpci[1] >> 0) & 1) << 0
                 tpci_unpacked['apci_data'] |= ((tpci[1] >> 1) & 1) << 1
@@ -459,7 +459,7 @@ class KnxMessage(object):
                 tpci_unpacked['apci'] |= ((tpci[1] >> 4) & 1) << 0
                 tpci_unpacked['apci'] |= ((tpci[1] >> 5) & 1) << 1
 
-                if tpci_unpacked['apci'] in APCI_TYPES.values():
+                if tpci_unpacked['apci'] in CEMI_APCI_TYPES.values():
                     tpci_unpacked['apci_data'] = 0
                     tpci_unpacked['apci_data'] |= ((tpci[1] >> 0) & 1) << 0
                     tpci_unpacked['apci_data'] |= ((tpci[1] >> 1) & 1) << 1
@@ -740,9 +740,9 @@ class KnxTunnellingRequest(KnxMessage):
         TYPES = {'CONNECT': 0x00,
                  'DISCONNECT': 0x01}
         assert ucd_type in TYPES.keys(), 'Invalid UCD type: {}'.format(ucd_type)
-        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 0) # Data length
-        npdu = TPCI_TYPES.get('UCD') << 14
+        npdu = CEMI_TPCI_TYPES.get('UCD') << 14
         npdu |= TYPES.get(ucd_type) << 8
         cemi += struct.pack('!H', npdu)
         self._pack_knx_body(cemi)
@@ -752,9 +752,9 @@ class KnxTunnellingRequest(KnxMessage):
         TYPES = {'ACK': 0x02,
                  'NACK': 0x03}
         assert ncd_type in TYPES.keys(), 'Invalid NCD type: {}'.format(ncd_type)
-        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 0)  # Data length
-        npdu = TPCI_TYPES.get('NCD') << 14
+        npdu = CEMI_TPCI_TYPES.get('NCD') << 14
         npdu |= sequence << 10
         npdu |= TYPES.get(ncd_type) << 8
         cemi += struct.pack('!H', npdu)
@@ -762,31 +762,31 @@ class KnxTunnellingRequest(KnxMessage):
         self.pack_knx_message()
 
     def apci_device_descriptor_read(self, sequence=0):
-        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 1) # Data length
-        npdu = TPCI_TYPES.get('NDP') << 14
+        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
         npdu |= sequence << 10
-        npdu |= APCI_TYPES['A_DeviceDescriptor_Read'] << 0
+        npdu |= CEMI_APCI_TYPES['A_DeviceDescriptor_Read'] << 0
         cemi += struct.pack('!H', npdu)
         self._pack_knx_body(cemi)
         self.pack_knx_message()
 
     def apci_individual_address_read(self, sequence=0):
-        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 1) # Data length
-        npdu = TPCI_TYPES.get('NDP') << 14
+        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
         npdu |= sequence << 10
-        npdu |= APCI_TYPES['A_IndividualAddress_Read'] << 0
+        npdu |= CEMI_APCI_TYPES['A_IndividualAddress_Read'] << 0
         cemi += struct.pack('!H', npdu)
         self._pack_knx_body(cemi)
         self.pack_knx_message()
 
     def apci_authorize_request(self, sequence=0, key=0xffffffff):
-        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 6)  # Data length
-        npdu = TPCI_TYPES.get('NDP') << 14
+        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
         npdu |= sequence << 10
-        npdu |= APCI_TYPES['A_Authorize_Request'] << 0
+        npdu |= CEMI_APCI_TYPES['A_Authorize_Request'] << 0
         cemi += struct.pack('!H', npdu)
         cemi += struct.pack('!B', 0) # reserved
         cemi += struct.pack('!I', key) # key
@@ -804,11 +804,11 @@ class KnxTunnellingRequest(KnxMessage):
         object index: 0x04, property id: 0x0d -> -
         object index: 0x04, property id: 0x06 -> -
         """
-        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 5) # Data length
-        npdu = TPCI_TYPES.get('NDP') << 14
+        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
         npdu |= sequence << 10
-        npdu |= APCI_TYPES['A_PropertyValue_Read'] << 0
+        npdu |= CEMI_APCI_TYPES['A_PropertyValue_Read'] << 0
         cemi += struct.pack('!H', npdu)
         cemi += struct.pack('!B', object_index) # object index
         cemi += struct.pack('!B', property_id) # property id
@@ -821,11 +821,11 @@ class KnxTunnellingRequest(KnxMessage):
     def apci_property_description_read(self, sequence=0, object_index=0, property_id=0x0f,
                                        num_elements=1, start_index=0):
         """A_PropertyDescription_Read"""
-        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 5)  # Data length
-        npdu = TPCI_TYPES.get('NDP') << 14
+        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
         npdu |= sequence << 10
-        npdu |= APCI_TYPES['A_PropertyDescription_Read'] << 0
+        npdu |= CEMI_APCI_TYPES['A_PropertyDescription_Read'] << 0
         cemi += struct.pack('!H', npdu)
         cemi += struct.pack('!B', object_index)  # object index
         cemi += struct.pack('!B', property_id)  # property id
@@ -837,11 +837,11 @@ class KnxTunnellingRequest(KnxMessage):
 
     def apci_adc_read(self, sequence=0):
         """A_ADC_Read"""
-        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 2) # Data length
-        npdu = TPCI_TYPES.get('NDP') << 14
+        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
         npdu |= sequence << 10
-        npdu |= APCI_TYPES['A_ADC_Read'] << 0
+        npdu |= CEMI_APCI_TYPES['A_ADC_Read'] << 0
         npdu |= 1 << 0 # channel nr
         cemi += struct.pack('!H', npdu)
         cemi += struct.pack('!B', 0x08)  # data
@@ -915,11 +915,11 @@ class KnxTunnellingRequest(KnxMessage):
         0xb6ea -> 0x01
         0xb6eb -> 0x01
         """
-        cemi = self._pack_cemi(message_code=CEMI_MESSAGE_CODES.get('L_Data.req'))
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 3) # Data length
-        npdu = TPCI_TYPES.get('NDP') << 14
+        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
         npdu |= sequence << 10
-        npdu |= APCI_TYPES['A_Memory_Read'] << 4
+        npdu |= CEMI_APCI_TYPES['A_Memory_Read'] << 4
         npdu |= read_count << 0 # number of octets to read/write
         cemi += struct.pack('!H', npdu)
         cemi += struct.pack('!H', memory_address)  # memory address
