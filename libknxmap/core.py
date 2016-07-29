@@ -7,10 +7,12 @@ __all__ = ['KNX_CONSTANTS',
            'KNX_MESSAGE_TYPES',
            'KNX_STATUS_CODES',
            'CEMI_PRIMITIVES',
-           'CEMI_MESSAGE_CODES',  # TODO: maybe find a better solution instead of having the same dict twice
-           'TPCI_TYPES',
-           'APCI_TYPES',
-           '_APCI_TYPES',
+           'CEMI_MSG_CODES',  # TODO: maybe find a better solution instead of having the same dict twice
+           '_CEMI_MSG_CODES',
+           'CEMI_TPCI_TYPES',
+           '_CEMI_TPCI_TYPES',
+           'CEMI_APCI_TYPES',
+           '_CEMI_APCI_TYPES',
            'DEVICE_OBJECTS',
            'PARAMETER_OBJECTS',
            'DEVICE_DESCRIPTORS',
@@ -139,7 +141,7 @@ CEMI_PRIMITIVES = {
     #: 'M_FuncPropStateRead.req'}
 
 
-CEMI_MESSAGE_CODES = {
+CEMI_MSG_CODES = {
     'L_Raw.req': 0x10,
     'L_Data.req': 0x11, # Request
     'L_Poll_Data.req': 0x13,
@@ -151,6 +153,20 @@ CEMI_MESSAGE_CODES = {
     'L_Raw.con': 0x2f,
     'M_PropRead.con': 0xfb,
     'M_PropRead.req': 0xfc}
+
+
+_CEMI_MSG_CODES = {
+    0x10: 'L_Raw.req',
+    0x11: 'L_Data.req', # Request
+    0x13: 'L_Poll_Data.req',
+    0x25: 'L_Poll_Data.con',
+    0x2e: 'L_Data.con', # Confirmation
+    0x29: 'L_Data.ind', # Receive a data frame
+    0x2b: 'L_Busmon.ind',
+    0x2d: 'L_Raw.ind',
+    0x2f: 'L_Raw.con',
+    0xfb: 'M_PropRead.con',
+    0xfc: 'M_PropRead.req'}
 
 
 CEMI_PRIORITIES = {
@@ -167,14 +183,21 @@ COMM_TYPES = {
     0x03: 'Numbered Control Data (NCD)'}
 
 
-TPCI_TYPES = {
+CEMI_TPCI_TYPES = {
     'UDP': 0x00,
     'NDP': 0x01,
     'UCD': 0x02,
     'NCD': 0x03}
 
 
-_APCI_TYPES = {
+_CEMI_TPCI_TYPES = {
+    0x00: 'UDP',
+    0x01: 'NDP',
+    0x02: 'UCD',
+    0x03: 'NCD'}
+
+
+_CEMI_APCI_TYPES = {
     0x000: 'A_GroupValue_Read',
     0x001: 'A_GroupValue_Response',
     0x100: 'A_IndividualAddress_Read',
@@ -232,7 +255,7 @@ _APCI_TYPES = {
     0x0c0: 'A_IndividualAddress_Write'}
 
 
-APCI_TYPES = {
+CEMI_APCI_TYPES = {
     'A_ADC_Read': 0x6,
     'A_ADC_Response': 0x1c0,
     'A_Authorize_Request': 0x3d1,
