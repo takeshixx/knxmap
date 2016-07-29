@@ -38,17 +38,19 @@ KNXmap supports to scan multiple targets at once by supplying multiple IP addres
 knxmap.py 192.168.1.100 192.168.1.110 192.168.2.0/24
 ```
 
-**Note**: Many KNXnet/IP gateways fail to properly handle subsequent discovery requests. As a consequence, discovering such devices can be quite unreliable!
-
 ### Bus Mode
 
 In addition to the discovery mode, KNXmap also supports to scan for devices on the KNX bus.
 
 ```
-knxmap.py --bus-targets 1.0.0-1.1.255 192.168.1.100
+knxmap.py --bus-targets 1.1.5 192.168.1.100
 ```
 
-**Note**: Currently only target ranges are allowed, so at least two devices must be scanned because e.g. 1.1.1-1.1.1 is not a valid target definition.
+KNXmap also supports bus address ranges:
+
+```
+knxmap.py --bus-targets 1.0.0-1.1.255 192.168.1.100
+```
 
 The default mode is to only check if sending messages to a address returns an error or not. This helps to identify potential devices and alive targets.
 
@@ -57,7 +59,7 @@ The default mode is to only check if sending messages to a address returns an er
 In addition to the default bus scanning KNXmap can also extract basic information from devices for further identification by supplying the `--bus-info` argument:
 
 ```
-knxmap.py --bus-targets 1.0.0-1.1.255 --bus-info 192.168.1.100
+knxmap.py --bus-targets 1.1.5 --bus-info 192.168.1.100
 ```
 
 ### Search Mode
