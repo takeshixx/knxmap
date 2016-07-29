@@ -27,8 +27,7 @@ class Targets:
         else:
             self.ports.add(3671)
 
-        if isinstance(targets, set) or \
-            isinstance(targets, list):
+        if isinstance(targets, (set, list)):
             self._parse(targets)
 
     def _parse(self, targets):
@@ -142,24 +141,41 @@ class BusResultSet:
         pass
 
 
-KnxTargetReport = collections.namedtuple(
-    'KnxTargetReport',
-    ['host',
-    'port',
-    'mac_address',
-    'knx_address',
-    'device_serial',
-    'friendly_name',
-    'device_status',
-    'knx_medium',
-    'project_install_identifier',
-    'supported_services',
-    'bus_devices'])
+class KnxTargetReport:
+
+    def __init__(self, host, port, mac_address, knx_address, device_serial,
+                 friendly_name, device_status, knx_medium, project_install_identifier,
+                 supported_services, bus_devices):
+        self.host = host
+        self.port = port
+        self.mac_address = mac_address
+        self.knx_address = knx_address
+        self.device_serial = device_serial
+        self.friendly_name = friendly_name
+        self.device_status = device_status
+        self.knx_medium = knx_medium
+        self.project_install_identifier = project_install_identifier
+        self.supported_services = supported_services
+        self.bus_devices = bus_devices
+
+    def __str__(self):
+        return self.host
+
+    def __repr__(self):
+        return self.host
 
 
-KnxBusTargetReport = collections.namedtuple(
-    'KnxBusTargetReport',
-    ['address',
-    'type',
-     'device_serial',
-     'manufacturer'])
+class KnxBusTargetReport:
+
+    def __init__(self, address, type, device_serial, manufacturer):
+        self.address = address
+        self.type = type
+        self.device_serial = device_serial
+        self.manufacturer = manufacturer
+
+    def __str__(self):
+        return self.address
+
+    def __repr__(self):
+        return self.address
+
