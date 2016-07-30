@@ -501,7 +501,7 @@ class KnxScanner:
             # Sort the device list based on KNX addresses
             x = dict()
             for i in knx_target.bus_devices:
-                x[str(i)] = i
+                x[KnxMessage.pack_knx_address(str(i))] = i
             bus_devices = collections.OrderedDict(sorted(x.items()))
 
             for k, d in bus_devices.items():
