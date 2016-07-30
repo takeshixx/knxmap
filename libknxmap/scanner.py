@@ -451,9 +451,10 @@ class KnxScanner:
             LOGGER.info('Starting bus monitor')
             future = asyncio.Future()
             bus_con = KnxBusMonitor(future, group_monitor=group_monitor_mode)
-            transport, self.bus_protocol = yield from self.loop.create_datagram_endpoint(
+            transport, protocol = yield from self.loop.create_datagram_endpoint(
                 lambda: bus_con,
                 remote_addr=list(self.targets)[0])
+            self.bus_protocols.append(protocol)
             yield from future
             LOGGER.info('Stopping bus monitor')
 
