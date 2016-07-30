@@ -16,6 +16,22 @@ KNXnet/IP defines Ethernet as physical communication media. It basically allows 
 
 **Note**: Unfourtunately the standard is proprietary which makes it impossible to be included in this repository.
 
+## Usage
+
+Install and run KNXmap:
+
+```
+python setup.py install
+knxmap.py --help
+```
+
+Or just invoke the script locally:
+
+```
+chmod +x knxmap.py
+./knxmap.py --help
+```
+
 ## Scanning Modes
 
 KNXmap supports three different scanning modes:
@@ -80,12 +96,6 @@ KNXmap supports two different monitoring modes:
 * Group monitoring (`--group-monitor`) prints all group messages received from the KNX bus.
 
 These monitoring modes can be useful for debugging communication on the bus. Additionally, they can be used for passive information gathering which allows to identify bus devices without sending messages to any individual or group address. Especially motion sensors or other devices that frequently send messages to the bus can easily be identified via bus monitoring.
-
-## TODO
- 
-* Implement KNXnet/IP Routing (bus.py)
-    * KNXnet/IP router device required (not available yet)
-* Implement [KNX ObjectServer protocol](http://www.weinzierl.de/images/download/products/770/KNX_BAOS_Protocol.pdf) (objectserver.py)
 
 ## Hacking
 
