@@ -357,13 +357,12 @@ class KnxBusMonitor(KnxTunnelConnection):
             connect_request = KnxConnectRequest(sockname=self.sockname)
         else:
             # Create a TUNNEL_BUSMONITOR layer request
-            connect_request = KnxConnectRequest(sockname=self.sockname, layer_type=0x80)
+            connect_request = KnxConnectRequest(sockname=self.sockname, layer_type='TUNNEL_BUSMONITOR')
         self.transport.sendto(connect_request.get_message())
         # Send CONNECTIONSTATE_REQUEST to keep the connection alive
         self.loop.call_later(50, self.knx_keep_alive)
 
     def datagram_received(self, data, addr):
-        LOGGER.debug('data: {}'.format(data))
         knx_message = parse_message(data)
 
         if not knx_message:
