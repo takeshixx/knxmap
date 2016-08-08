@@ -409,6 +409,7 @@ class KnxMessage(object):
             cemi['additional_information']['extended_relative_timestamp'] = self._unpack_stream('!B', message)
             cemi['additional_information']['extended_relative_timestamp'] = self._unpack_stream('!I', message)
             cemi['raw_frame'] = message.read()
+            return cemi
 
         cemi['controlfield_1'] = self.unpack_cemi_cf1(self._unpack_stream('!B', message))
         cemi['controlfield_2'] = self.unpack_cemi_cf2(self._unpack_stream('!B', message))
