@@ -9,6 +9,7 @@ import socket
 import struct
 import sys
 import time
+import functools
 try:
     # Python 3.4
     from asyncio import JoinableQueue as Queue
@@ -313,9 +314,9 @@ class KnxScanner:
         #     print(resp)
 
         future = asyncio.Future()
-        bus_con = KnxTunnelConnection(future)
         transport, bus_protocol = yield from self.loop.create_datagram_endpoint(
-            lambda: bus_con, remote_addr=(knx_gateway.host, knx_gateway.port))
+            functools.partial(KnxTunnelConnection, future),
+            remote_addr=(knx_gateway.host, knx_gateway.port))
         self.bus_protocols.append(bus_protocol)
 
         # Make sure the tunnel has been established
@@ -401,10 +402,9 @@ class KnxScanner:
                 for _try in range(self.desc_retries):
                     LOGGER.debug('Sending {}. KnxDescriptionRequest to {}'.format(_try, target))
                     future = asyncio.Future()
-                    description = KnxGatewayDescription(future,
-                                                        timeout=self.desc_timeout)
-                    yield from self.loop.create_datagram_endpoint(lambda: description,
-                                                                  remote_addr=target)
+                    yield from self.loop.create_datagram_endpoint(
+                        functools.partial(KnxGatewayDescription, future, timeout=self.desc_timeout),
+                        remote_addr=target)
                     response = yield from future
                     if response:
                         break
@@ -450,9 +450,8 @@ class KnxScanner:
         elif bus_monitor_mode or group_monitor_mode:
             LOGGER.info('Starting bus monitor')
             future = asyncio.Future()
-            bus_con = KnxBusMonitor(future, group_monitor=group_monitor_mode)
             transport, protocol = yield from self.loop.create_datagram_endpoint(
-                lambda: bus_con,
+                functools.partial(KnxBusMonitor, future, group_monitor=group_monitor_mode),
                 remote_addr=list(self.targets)[0])
             self.bus_protocols.append(protocol)
             yield from future
