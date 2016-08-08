@@ -410,8 +410,8 @@ class KnxBusMonitor(KnxTunnelConnection):
         """A generic message printing function. It defines a format for the monitoring modes."""
         assert isinstance(message, KnxTunnellingRequest)
         if self.group_monitor:
-            format = '[ chan_id: {chan_id}, seq_no: {seq_no}, message_code: {msg_code}, \
-                        source_addr: {src_addr}, dest_addr: {dst_addr}, tcpi: {tcpi}, apci: {apci} ]'.format(
+            format = ('[ chan_id: {chan_id}, seq_no: {seq_no}, message_code: {msg_code}, '
+                      'source_addr: {src_addr}, dest_addr: {dst_addr}, tcpi: {tcpi}, apci: {apci} ]').format(
                 chan_id=message.body.get('communication_channel_id'),
                 seq_no=message.body.get('sequence_counter'),
                 msg_code=CEMI_PRIMITIVES[message.body.get('cemi').get('message_code')],
@@ -420,8 +420,8 @@ class KnxBusMonitor(KnxTunnelConnection):
                 tcpi=message.body.get('cemi').get('tcpi'),
                 apci=message.body.get('cemi').get('apci'))
         else:
-            format = '[ chan_id: {chan_id}, seq_no: {seq_no}, message_code: {msg_code}, \
-                        raw_frame: {raw_frame} ]'.format(
+            format = ('[ chan_id: {chan_id}, seq_no: {seq_no}, message_code: {msg_code}, '
+                      'raw_frame: {raw_frame} ]').format(
                 chan_id=message.body.get('communication_channel_id'),
                 seq_no=message.body.get('sequence_counter'),
                 msg_code=CEMI_PRIMITIVES[message.body.get('cemi').get('message_code')],
