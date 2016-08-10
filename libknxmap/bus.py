@@ -167,8 +167,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
 
             if cemi_msg_code == CEMI_MSG_CODES.get('L_Data.con'):
                 # TODO: is this for NCD's even necessary?
-                if cemi_tpci_type == CEMI_TPCI_TYPES.get('UCD') or \
-                            cemi_tpci_type == CEMI_TPCI_TYPES.get('NCD'):
+                if cemi_tpci_type in [CEMI_TPCI_TYPES.get('UCD'), CEMI_TPCI_TYPES.get('NCD')]:
                     # This could be e.g. a response for a tcpi_connect() or
                     # tpci_send_ncd() message. For these messages the return
                     # value should be boolean to indicate that either a
@@ -188,8 +187,8 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                 elif cemi_tpci_type == CEMI_TPCI_TYPES.get('NDP'):
                     # If we get a confirmation for our device descriptor request,
                     # check if L_Data.ind arrives.
-                    if cemi_apci_type == CEMI_APCI_TYPES.get('A_DeviceDescriptor_Read') or \
-                            cemi_apci_type == CEMI_APCI_TYPES.get('A_PropertyValue_Read'):
+                    if cemi_apci_type in [CEMI_APCI_TYPES.get('A_DeviceDescriptor_Read'),
+                                          CEMI_APCI_TYPES.get('A_PropertyValue_Read')]:
                         self.loop.call_later(3, self.process_target, knx_dst, False, knx_msg)
 
             elif cemi_msg_code == CEMI_MSG_CODES.get('L_Data.ind'):
@@ -244,8 +243,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
 
             # If we receive any L_Data.con or L_Data.ind from a KNXnet/IP gateway
             # we have to reply with a tunnelling ack.
-            if cemi_msg_code == CEMI_MSG_CODES.get('L_Data.con') or \
-                            cemi_msg_code == CEMI_MSG_CODES.get('L_Data.ind'):
+            if cemi_msg_code in [CEMI_MSG_CODES.get('L_Data.con'), CEMI_MSG_CODES.get('L_Data.ind')]:
                 tunnelling_ack = KnxTunnellingAck(
                     communication_channel=knx_msg.body.get('communication_channel_id'),
                     sequence_count=knx_msg.body.get('sequence_counter'))
