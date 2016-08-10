@@ -16,7 +16,7 @@ LOGGER = logging.getLogger(__name__)
 
 class Targets:
     """A helper class that expands provided target definitions to a list of tuples."""
-    def __init__(self, targets=set(), ports=3671):
+    def __init__(self, targets=None, ports=3671):
         self.targets = set()
         self.ports = set()
         if isinstance(ports, list):
