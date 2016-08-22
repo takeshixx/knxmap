@@ -883,38 +883,66 @@ class KnxTunnellingRequest(KnxMessage):
 
         0x010d  -> run error
 
-              Bit  |
-             ------+---------------------------------------------------------------
-               7   | Unknown
-                   |
-             ------+---------------------------------------------------------------
-               6   | SYS3_ERR (internal system failure)
-                   | Memory control block broken
-             ------+---------------------------------------------------------------
-               5   | SYS2_ERR (internal system failure)
-                   | Temperature
-             ------+---------------------------------------------------------------
-               4   | OBJ_ERR
-                   | RAM flag failure
-             ------+---------------------------------------------------------------
-               3   | STK_OVL
-                   | Stack overload
-             ------+---------------------------------------------------------------
-               2   | EEPROM_ERR
-                   | EEPROM encountered checksum error
-             ------+---------------------------------------------------------------
-               1   | SYS1_ERR (internal system failure)
-                   | Wrong parity bit
-             ------+---------------------------------------------------------------
-               0   | SYS0_ERR (internal system failure)
-                   | Message buffer offset broken
-             ------+---------------------------------------------------------------
 
-        0x0104 -> manufacturer id
-        0xb6ec -> 0x01
-        0xb6ed -> 0x01
-        0xb6ea -> 0x01
-        0xb6eb -> 0x01
+
+        EEPROM:
+        0x0100 OptionReg: Option Register (MC68HC05B06)
+        0x0101 ManData: Data provided by the manufacturer of the BCU (see further down) (3 Bytes)
+        0x0104 Manufact: ID of the application manufacturer
+        0x0105 DevTyp: Manufacturer-specific device type ID (2 Bytes)
+        0x0107 Version: Version number of the application program
+        0x0108 CheckLim: Specifies the end address of the EEPROM range that is to be covered by
+                         the system check procedure. The address area to be checked ranges from
+                         $0108 to $100+ChekLim-1.
+        0x0109 PEI type: Type of PEI required for the application program
+        0x010A SyncRate: Baud rate for the PEIs of type 12,14 ‘serial synchronous PEI’
+        0x010B PortCDDR: Defines the directions of data flow of port C for a PEI of type 17 ‘
+                         programmable I/O’
+        0x010C PortADDR: Defines the directions of data flow for port A.
+        0x010D RunError: Runtime error flags
+                          Bit  |
+                         ------+---------------------------------------------------------------
+                           7   | Unknown
+                               |
+                         ------+---------------------------------------------------------------
+                           6   | SYS3_ERR (internal system failure)
+                               | Memory control block broken
+                         ------+---------------------------------------------------------------
+                           5   | SYS2_ERR (internal system failure)
+                               | Temperature
+                         ------+---------------------------------------------------------------
+                           4   | OBJ_ERR
+                               | RAM flag failure
+                         ------+---------------------------------------------------------------
+                           3   | STK_OVL
+                               | Stack overload
+                         ------+---------------------------------------------------------------
+                           2   | EEPROM_ERR
+                               | EEPROM encountered checksum error
+                         ------+---------------------------------------------------------------
+                           1   | SYS1_ERR (internal system failure)
+                               | Wrong parity bit
+                         ------+---------------------------------------------------------------
+                           0   | SYS0_ERR (internal system failure)
+                               | Message buffer offset broken
+                         ------+---------------------------------------------------------------
+        0x010E RouteCnt: Routing counter constant (layer 3), structure:
+                         0ccc0000, ccc = routing counter constant (0 to 7)
+        0x010F MxRstCnt: Contains the INAK and BUSY retries (layer 2), structure:
+                         bbb00iii, bbb=BUSY retries
+                         iii=INAK retries
+        0x0110 ConfigDes: Configuration descriptor (see further down)
+        0x0111 AssocTabPtr: Pointer to the Association Table (layer 7)
+        0x0112 CommsTabPtr: Pointer to the Table of group objects
+        0x0113 UsrInitPtr: Pointer to the initialization routine of the application program
+        0x0114 UsrPrgPtr: Pointer to the application program
+        0x0115 UsrSavPtr: Pointer to the SAVE subroutine of the application program
+        0x0116 AdrTab: Address table (layers 2 and 4)
+                       m = No. of group addresses (1 + (1 + m) * 2 Bytes)
+        ...0x01FE       Application program UsrPrg,
+                        Initialisation program UsrInit,
+                        SAVE subroutine UsrSav
+        0x01FF EE_EXOR: EEPROM checksum for the range to be checked (cp. CheckLim)
         """
         cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 3) # Data length
