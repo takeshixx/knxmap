@@ -81,18 +81,6 @@ class KnxScanner:
                 alive = yield from protocol.tpci_connect(target)
 
                 if alive:
-                    if not self.bus_info:
-                        t = KnxBusTargetReport(
-                            address=target,
-                            type=None,
-                            device_serial=None,
-                            manufacturer=None)
-                        self.bus_devices.add(t)
-                        queue.task_done()
-                        continue
-
-                    # TODO: the device is alive, but not probably we cannot read any properties
-
                     # DeviceDescriptorRead
                     tunnel_request = protocol.make_tunnel_request(target)
                     tunnel_request.apci_device_descriptor_read(sequence=protocol.tpci_seq_counts.get(target))
@@ -100,13 +88,6 @@ class KnxScanner:
 
                     if not isinstance(descriptor, KnxTunnellingRequest) or not \
                             descriptor.body.get('cemi').get('apci') == CEMI_APCI_TYPES.get('A_DeviceDescriptor_Response'):
-                        LOGGER.info('NO PROPER DEVICE DESCRIPTOR RETURNED')
-                        t = KnxBusTargetReport(
-                            address=target,
-                            type=None,
-                            device_serial=None,
-                            manufacturer=None)
-                        self.bus_devices.add(t)
                         tunnel_request = protocol.make_tunnel_request(target)
                         tunnel_request.tpci_unnumbered_control_data('DISCONNECT')
                         protocol.send_data(tunnel_request.get_message(), target)
@@ -117,6 +98,22 @@ class KnxScanner:
                     if not ret:
                         # TODO: if this is False, can we continue with the KNX connection?
                         LOGGER.error('ERROR OCCURED AFTER READING DEVICE DESCRIPTOR')
+
+                    if isinstance(descriptor, KnxTunnellingRequest) and \
+                                descriptor.body.get('cemi').get('apci') == \
+                                CEMI_APCI_TYPES.get('A_DeviceDescriptor_Response') and \
+                                not self.bus_info:
+                            t = KnxBusTargetReport(
+                                address=target,
+                                type=None,
+                                device_serial=None,
+                                manufacturer=None)
+                            self.bus_devices.add(t)
+                            tunnel_request = protocol.make_tunnel_request(target)
+                            tunnel_request.tpci_unnumbered_control_data('DISCONNECT')
+                            protocol.send_data(tunnel_request.get_message(), target)
+                            queue.task_done()
+                            continue
 
                     dev_desc = struct.unpack('!H', descriptor.body.get('cemi').get('data'))[0]
                     manufacturer = None
