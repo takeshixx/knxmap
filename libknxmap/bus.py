@@ -249,7 +249,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                     sequence_count=knx_msg.body.get('sequence_counter'))
                 self.transport.sendto(tunnelling_ack.get_message())
 
-        elif not isinstance(knx_msg, KnxTunnellingAck):
+        elif isinstance(knx_msg, KnxTunnellingAck):
             # TODO: do we have to increase any sequence here?
             LOGGER.debug('Tunnelling ACK reqceived')
         else:
