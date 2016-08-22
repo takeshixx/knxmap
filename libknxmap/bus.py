@@ -31,8 +31,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
 
         * Sending a KnxConnectRequest
         * Schedule KnxConnectionStateRequests
-        * Schedule response queue polling
-        """
+        * Schedule response queue polling"""
         self.transport = transport
         self.peername = self.transport.get_extra_info('peername')
         self.sockname = self.transport.get_extra_info('sockname')

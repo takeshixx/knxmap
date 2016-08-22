@@ -399,7 +399,7 @@ DEVICE_DESCRIPTORS = {
     0x17B0: 'System B',
     0x1900: 'Media Coupler PL-TP',
     0x2010: 'Bidirectional devices',
-    0x2110: 'Unidirectional devices',
+    0x2011: 'Unidirectional devices',
     0x2322: 'RF USB interface v2',
     0x3012: 'BCU 1',
     0x4012: 'BCU 1',

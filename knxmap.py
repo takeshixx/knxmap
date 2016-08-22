@@ -81,7 +81,7 @@ def main():
     args = ARGS.parse_args()
     if not args.targets and not args.search_mode:
         ARGS.print_help()
-        sys.exit()
+        sys.exit(1)
 
     targets = Targets(args.targets, args.port)
     bus_targets = KnxTargets(args.bus_targets)

@@ -54,6 +54,7 @@ def parse_message(data):
         LOGGER.debug('Parsing KnxConnectResponse')
         return KnxConnectResponse(data)
     elif message_type == KNX_MESSAGE_TYPES.get('TUNNELLING_REQUEST'):
+        LOGGER.debug('Parsing KnxTunnellingRequest')
         return KnxTunnellingRequest(data)
     elif message_type == KNX_MESSAGE_TYPES.get('TUNNELLING_ACK'):
         LOGGER.debug('Parsing KnxTunnelingAck')
