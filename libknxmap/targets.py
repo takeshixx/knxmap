@@ -167,9 +167,12 @@ class KnxTargetReport:
 
 class KnxBusTargetReport:
 
-    def __init__(self, address, type, device_serial, manufacturer):
+    def __init__(self, address, medium=None, type=None, version=None,
+                 device_serial=None, manufacturer=None):
         self.address = address
+        self.medium = medium
         self.type = type
+        self.version = version
         self.device_serial = device_serial
         self.manufacturer = manufacturer
 

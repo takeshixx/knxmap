@@ -103,11 +103,7 @@ class KnxScanner:
                                 descriptor.body.get('cemi').get('apci') == \
                                 CEMI_APCI_TYPES.get('A_DeviceDescriptor_Response') and \
                                 not self.bus_info:
-                            t = KnxBusTargetReport(
-                                address=target,
-                                type=None,
-                                device_serial=None,
-                                manufacturer=None)
+                            t = KnxBusTargetReport(address=target)
                             self.bus_devices.add(t)
                             tunnel_request = protocol.make_tunnel_request(target)
                             tunnel_request.tpci_unnumbered_control_data('DISCONNECT')
@@ -269,10 +265,14 @@ class KnxScanner:
                         #         # NCD
                         #         ret = yield from protocol.tpci_send_ncd(target)
 
+                    medium, type, version = KnxMessage.parse_device_descriptor(dev_desc)
+
                     if descriptor:
                         t = KnxBusTargetReport(
                             address=target,
-                            type=DEVICE_DESCRIPTORS.get(dev_desc) or 'Unknown',
+                            medium=medium,
+                            type=type,
+                            version=version,
                             device_serial=serial or 'Unavailable',
                             manufacturer=manufacturer or 'Unknown')
                         self.bus_devices.add(t)
@@ -504,8 +504,12 @@ class KnxScanner:
             for k, d in bus_devices.items():
                 _d = dict()
                 _d[d.address] = collections.OrderedDict()
+                if d.medium:
+                    _d[d.address]['Medium'] = d.medium
                 if d.type:
                     _d[d.address]['Type'] = d.type
+                if d.version:
+                    _d[d.address]['Version'] = d.version
                 if d.device_serial:
                     _d[d.address]['Device Serial'] = d.device_serial
                 if d.manufacturer:
