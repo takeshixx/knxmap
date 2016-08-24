@@ -15,7 +15,6 @@ __all__ = ['KNX_CONSTANTS',
            '_CEMI_APCI_TYPES',
            'DEVICE_OBJECTS',
            'PARAMETER_OBJECTS',
-           'DEVICE_DESCRIPTORS',
            'Error']
 
 
@@ -370,40 +369,6 @@ PARAMETER_OBJECTS = {
     'PID_MSG_TRANSMIT_TO_KNX': 0x4b,
     'PID_FRIENDLY_NAME': 0x4c,
     'PID_ROUTING_BUSY_WAIT_TIME': 0x4e}
-
-
-DEVICE_DESCRIPTORS = {
-    0x0010: 'System 1 (BCU 1)',
-    0x0011: 'System 1 (BCU 1)',
-    0x0012: 'System 1 (BCU 1)',
-    0x0013: 'System 1 (BCU 1)',
-    0x0020: 'System 2 (BCU 2)',
-    0x0021: 'System 2 (BCU 2)',
-    0x0025: 'System 2 (BCU 2)',
-    0x0300: 'System 300',
-    0x0310: 'TP1 USB interface v1',
-    0x0700: 'BIM M112',
-    0x0701: 'BIM M112',
-    0x0705: 'BIM M112',
-    0x07B0: 'System B',
-    0x0810: 'IR-Decoder',
-    0x0811: 'IR-Decoder',
-    0x0910: 'Coupler 1.0',
-    0x0911: 'Coupler 1.1',
-    0x0912: 'Coupler 1.2',
-    0x091A: 'KNXnet/IP Router',
-    0x0AFD: 'none',
-    0x0AFE: 'none',
-    0x1012: 'BCU 1',
-    0x1013: 'BCU 1',
-    0x17B0: 'System B',
-    0x1900: 'Media Coupler PL-TP',
-    0x2010: 'Bidirectional devices',
-    0x2011: 'Unidirectional devices',
-    0x2322: 'RF USB interface v2',
-    0x3012: 'BCU 1',
-    0x4012: 'BCU 1',
-    0x5705: 'System 7'}
 
 
 class Error(Exception):
