@@ -3,14 +3,17 @@ of targets and results easiert."""
 import logging
 import ipaddress
 import collections
+import binascii
 
-from .messages import *
+from libknxmap.core import *
+from libknxmap.messages import *
 
 __all__ = ['Targets',
            'KnxTargets',
            'BusResultSet',
            'KnxTargetReport',
-           'KnxBusTargetReport']
+           'KnxBusTargetReport',
+           'print_knx_target']
 
 LOGGER = logging.getLogger(__name__)
 
@@ -182,3 +185,73 @@ class KnxBusTargetReport:
     def __repr__(self):
         return self.address
 
+
+def print_knx_target(knx_target):
+    """Print a target of type KnxTargetReport in a well formatted way."""
+    # TODO: make this better, and prettier.
+    out = dict()
+    out[knx_target.host] = collections.OrderedDict()
+    o = out[knx_target.host]
+    o['Port'] = knx_target.port
+    o['MAC Address'] = knx_target.mac_address
+    o['KNX Bus Address'] = knx_target.knx_address
+    o['KNX Device Serial'] = knx_target.device_serial
+    o['KNX Medium'] = KNX_MEDIUMS.get(knx_target.knx_medium)
+    o['Device Friendly Name'] = binascii.b2a_qp(knx_target.friendly_name.strip().replace(b'\x00', b'')).decode()
+    o['Device Status'] = knx_target.device_status
+    o['Project Install Identifier'] = knx_target.project_install_identifier
+    o['Supported Services'] = knx_target.supported_services
+    if knx_target.bus_devices:
+        o['Bus Devices'] = list()
+
+        # Sort the device list based on KNX addresses
+        x = dict()
+        for i in knx_target.bus_devices:
+            x[KnxMessage.pack_knx_address(str(i))] = i
+        bus_devices = collections.OrderedDict(sorted(x.items()))
+
+        for k, d in bus_devices.items():
+            _d = dict()
+            _d[d.address] = collections.OrderedDict()
+            if hasattr(d, 'type'):
+                _d[d.address]['Type'] = DEVICE_TYPES.get(d.type)
+            if hasattr(d, 'medium'):
+                _d[d.address]['Medium'] = KNX_BUS_MEDIUMS.get(d.medium)
+            if hasattr(d, 'device_serial'):
+                _d[d.address]['Device Serial'] = d.device_serial
+            if hasattr(d, 'manufacturer'):
+                _d[d.address]['Manufacturer'] = d.manufacturer
+            if hasattr(d, 'version'):
+                _d[d.address]['Version'] = d.version
+            o['Bus Devices'].append(_d)
+
+    print()
+
+    def print_fmt(d, indent=0):
+        for key, value in d.items():
+            if indent is 0:
+                print('   ' * indent + str(key))
+            elif isinstance(value, (dict, collections.OrderedDict)):
+                if not len(value.keys()):
+                    print('   ' * indent + str(key))
+                else:
+                    print('   ' * indent + str(key) + ': ')
+            else:
+                print('   ' * indent + str(key) + ': ', end="", flush=True)
+
+            if key == 'Bus Devices':
+                print()
+                for i in value:
+                    print_fmt(i, indent + 1)
+            elif isinstance(value, list):
+                for i, v in enumerate(value):
+                    if i is 0:
+                        print()
+                    print('   ' * (indent + 1) + str(v))
+            elif isinstance(value, (dict, collections.OrderedDict)):
+                print_fmt(value, indent + 1)
+            else:
+                print(value)
+
+    print_fmt(out)
+    print()
