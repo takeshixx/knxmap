@@ -167,36 +167,17 @@ class KnxMessage(object):
 
     @staticmethod
     def parse_device_descriptor(desc):
-        """Parse a device descriptor to human readable format.
-        This function returns three values: medium, device type
-        and version.
+        """Parse device descriptors to three separate integers.
 
         >>> parse_device_descriptor(1793)
-        ('TP1', 'System 7 (BIM M 112)', '1')
+        (0, 112, 1)
         """
         assert isinstance(desc, int), 'Device descriptor is not an int'
         desc = format(desc, '04x')
-        MEDIUMS = {
-            0: 'TP1',
-            1: 'PL110',
-            2: 'RF',
-            5: 'KNXnet/IP'}
-        TYPES = {
-            '01': 'System 1 (BCU1)',
-            '02': 'System 2 (BCU2)',
-            '70': 'System 7 (BIM M 112)',
-            '7b': 'System B',
-            '30': 'LTE',
-            '91': 'TP1 Line/area coupler - Repeater',
-            '90': 'Media coupler TP1-PL110'}
-        medium = desc[0]
-        if int(medium) in MEDIUMS.keys():
-            medium = MEDIUMS.get(int(medium))
-        type = desc[1:-1]
-        if type in TYPES.keys():
-            type = TYPES.get(type)
-        version = desc[-1]
-        return medium, type, version
+        medium = int(desc[0])
+        dev_type = int(desc[1:-1], 16)
+        version = int(desc[-1])
+        return medium, dev_type, version
 
     def set_peer(self, peer):
         assert isinstance(peer, tuple), ('Peer is not a tuple')
