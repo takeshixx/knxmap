@@ -17,12 +17,13 @@ except ImportError:
     # Python 3.5 renamed it to Queue
     from asyncio import Queue
 
-from .core import *
-from .messages import *
-from .gateway import *
-from .bus import *
-from .manufacturers import *
-from .targets import *
+from libknxmap.core import *
+from libknxmap.messages import *
+from libknxmap.gateway import *
+from libknxmap.manufacturers import *
+from libknxmap.targets import *
+from libknxmap.bus.tunnel import KnxTunnelConnection
+from libknxmap.bus.monitor import KnxBusMonitor
 
 __all__ = ['KnxScanner']
 
