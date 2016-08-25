@@ -1,5 +1,4 @@
 import asyncio
-import argparse
 import binascii
 import collections
 import codecs
