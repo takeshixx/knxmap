@@ -213,15 +213,20 @@ def print_knx_target(knx_target):
         for k, d in bus_devices.items():
             _d = dict()
             _d[d.address] = collections.OrderedDict()
-            if hasattr(d, 'type'):
+            if hasattr(d, 'type') and \
+                    not isinstance(d.type, (type(None), type(False))):
                 _d[d.address]['Type'] = DEVICE_TYPES.get(d.type)
-            if hasattr(d, 'medium'):
+            if hasattr(d, 'medium') and \
+                    not isinstance(d.medium, (type(None), type(False))):
                 _d[d.address]['Medium'] = KNX_BUS_MEDIUMS.get(d.medium)
-            if hasattr(d, 'device_serial'):
+            if hasattr(d, 'device_serial') and \
+                    not isinstance(d.device_serial, (type(None), type(False))):
                 _d[d.address]['Device Serial'] = d.device_serial
-            if hasattr(d, 'manufacturer'):
+            if hasattr(d, 'manufacturer') and \
+                    not isinstance(d.manufacturer, (type(None), type(False))):
                 _d[d.address]['Manufacturer'] = d.manufacturer
-            if hasattr(d, 'version'):
+            if hasattr(d, 'version') and \
+                    not isinstance(d.version, (type(None), type(False))):
                 _d[d.address]['Version'] = d.version
             o['Bus Devices'].append(_d)
 

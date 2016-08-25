@@ -443,7 +443,7 @@ class KnxScanner:
             LOGGER.info('Make sure there are no filtering rules that drop UDP multicast packets!')
             yield from self.search_gateways()
             for t in self.knx_gateways:
-                self.print_knx_target(t)
+                print_knx_target(t)
             LOGGER.info('Searching done')
 
         elif bus_monitor_mode or group_monitor_mode:
