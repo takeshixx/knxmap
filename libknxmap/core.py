@@ -4,6 +4,8 @@ imported by other modules in this package."""
 __all__ = ['KNX_CONSTANTS',
            'KNX_SERVICES',
            'KNX_MEDIUMS',
+           'KNX_BUS_MEDIUMS',
+           'DEVICE_TYPES',
            'KNX_MESSAGE_TYPES',
            'KNX_STATUS_CODES',
            'CEMI_PRIMITIVES',
@@ -42,6 +44,23 @@ KNX_MEDIUMS = {
     0x08: 'reserved',
     0x10: 'KNX RF',
     0x20: 'KNX IP'}
+
+
+KNX_BUS_MEDIUMS = {
+    0: 'TP1',
+    1: 'PL110',
+    2: 'RF',
+    5: 'KNXnet/IP'}
+
+
+DEVICE_TYPES = {
+    0x01: 'System 1 (BCU1)',
+    0x02: 'System 2 (BCU2)',
+    0x70: 'System 7 (BIM M 112)',
+    0x7b: 'System B',
+    0x30: 'LTE',
+    0x91: 'TP1 Line/area coupler - Repeater',
+    0x90: 'Media coupler TP1-PL110'}
 
 
 _KNX_MESSAGE_TYPES = {
