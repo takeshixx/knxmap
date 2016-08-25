@@ -112,12 +112,12 @@ class KnxScanner:
                             continue
 
                     dev_desc = struct.unpack('!H', descriptor.body.get('cemi').get('data'))[0]
+                    desc_medium, desc_type, desc_version = KnxMessage.parse_device_descriptor(dev_desc)
                     manufacturer = None
                     serial = None
 
-                    if dev_desc > 0x13:
-                        # System 1 devices do not have interface objects or a serial number
-                        # PropertyValueRead
+                    if desc_type > 1:
+                        # Read System 2 and System 7 manufacturer ID object
                         tunnel_request = protocol.make_tunnel_request(target)
                         tunnel_request.apci_property_value_read(
                             sequence=protocol.tpci_seq_counts.get(target),
@@ -126,20 +126,22 @@ class KnxScanner:
                         manufacturer = yield from protocol.send_data(tunnel_request.get_message(), target)
                         if isinstance(manufacturer, KnxTunnellingRequest):
                             if manufacturer.body.get('cemi').get('data'):
+                                print(manufacturer.body.get('cemi'))
                                 manufacturer = manufacturer.body.get('cemi').get('data')[4:]
                             else:
                                 LOGGER.info('manufacturer: data not included')
                         else:
                             LOGGER.info('NOT KnxTunnellingRequest: {}'.format(manufacturer))
                     else:
-                        # MemoryRead manufacturer ID
+                        # Try to MemoryRead the manufacturer ID on System 1 devices.
+                        # Note: System 1 devices do not support access controls, so
+                        # an authorization request is not needed.
                         tunnel_request = protocol.make_tunnel_request(target)
                         tunnel_request.apci_memory_read(
                             sequence=protocol.tpci_seq_counts.get(target),
                             memory_address=0x0104,
                             read_count=1)
                         manufacturer = yield from protocol.send_data(tunnel_request.get_message(), target)
-                        # TODO: check if it returned a proper response
                         if isinstance(manufacturer, KnxTunnellingRequest):
                             if manufacturer.body.get('cemi').get('data'):
                                 manufacturer = manufacturer.body.get('cemi').get('data')[2:]
@@ -156,26 +158,28 @@ class KnxScanner:
                             manufacturer = int.from_bytes(manufacturer, 'big')
                             manufacturer = get_manufacturer_by_id(manufacturer)
 
-                    if dev_desc <= 0x13:
+                    if desc_type == 1:
                         # MemoryRead application program
                         tunnel_request = protocol.make_tunnel_request(target)
                         tunnel_request.apci_memory_read(
                             sequence=protocol.tpci_seq_counts.get(target),
-                            memory_address=0x0104,
+                            memory_address=0x0105,
                             read_count=4)
-                        application_program = yield from protocol.send_data(tunnel_request.get_message(), target)
-                        if isinstance(application_program, KnxTunnellingRequest):
-                            if application_program.body.get('cemi').get('data'):
-                                application_program = application_program.body.get('cemi').get('data')[2:]
+                        device_id = yield from protocol.send_data(tunnel_request.get_message(), target)
+                        if isinstance(device_id, KnxTunnellingRequest):
+                            if device_id.body.get('cemi').get('data'):
+                                device_id = device_id.body.get('cemi').get('data')[2:]
                             else:
                                 LOGGER.info('application_program: data not included')
                         else:
-                            LOGGER.info('NOT KnxTunnellingRequest: {}'.format(application_program))
+                            LOGGER.info('NOT KnxTunnellingRequest: {}'.format(device_id))
                         yield from protocol.tpci_send_ncd(target)
 
-                    if dev_desc > 0x13:
-                        # PropertyValueRead
-                        # Read the serial number
+                        # TODO: is this comparable to an actual serial?
+                        serial = codecs.encode(device_id, 'hex')
+
+                    if desc_type > 1:
+                        # Read the serial number object on System 2 and System 7 devices
                         tunnel_request = protocol.make_tunnel_request(target)
                         tunnel_request.apci_property_value_read(
                             sequence=protocol.tpci_seq_counts.get(target),
@@ -265,16 +269,14 @@ class KnxScanner:
                         #         # NCD
                         #         ret = yield from protocol.tpci_send_ncd(target)
 
-                    medium, type, version = KnxMessage.parse_device_descriptor(dev_desc)
-
                     if descriptor:
                         t = KnxBusTargetReport(
                             address=target,
-                            medium=medium,
-                            type=type,
-                            version=version,
-                            device_serial=serial or 'Unavailable',
-                            manufacturer=manufacturer or 'Unknown')
+                            medium=desc_medium,
+                            type=desc_type,
+                            version=desc_version,
+                            device_serial=serial,
+                            manufacturer=manufacturer)
                         self.bus_devices.add(t)
 
                     # Properly close the TPCI layer
