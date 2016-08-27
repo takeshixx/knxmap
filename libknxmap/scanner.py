@@ -243,26 +243,6 @@ class KnxScanner:
     def bus_scan(self, knx_gateway, bus_targets):
         queue = self.add_bus_queue(knx_gateway.host, bus_targets)
         LOGGER.info('Scanning {} bus device(s) on {}'.format(queue.qsize(), knx_gateway.host))
-
-        # DEV: test configuration request
-        # future = asyncio.Future()
-        # bus_con = KnxTunnelConnection(future, connection_type=0x03) # DEVICE_MGMT_CONNECTION
-        # transport, bus_protocol = yield from self.loop.create_datagram_endpoint(
-        #     lambda: bus_con, remote_addr=(knx_gateway.host, knx_gateway.port))
-        # self.bus_protocols.append(bus_protocol)
-        #
-        # connected = yield from future
-        # if connected:
-        #     conf_req = bus_protocol.make_configuration_request()
-        #     print("bla")
-        #     print(conf_req)
-        #     bla = conf_req.get_message()
-        #     print(bla)
-        #     print("blubb")
-        #     resp = yield from bus_protocol.send_data(conf_req.get_message())
-        #     LOGGER.info('CONFIGURATION RESPONSE')
-        #     print(resp)
-
         future = asyncio.Future()
         transport, bus_protocol = yield from self.loop.create_datagram_endpoint(
             functools.partial(KnxTunnelConnection, future),
