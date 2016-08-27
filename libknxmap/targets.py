@@ -171,13 +171,14 @@ class KnxTargetReport:
 class KnxBusTargetReport:
 
     def __init__(self, address, medium=None, type=None, version=None,
-                 device_serial=None, manufacturer=None):
+                 device_serial=None, manufacturer=None, properties=None):
         self.address = address
         self.medium = medium
         self.type = type
         self.version = version
         self.device_serial = device_serial
         self.manufacturer = manufacturer
+        self.properties = properties
 
     def __str__(self):
         return self.address
@@ -228,6 +229,9 @@ def print_knx_target(knx_target):
             if hasattr(d, 'version') and \
                     not isinstance(d.version, (type(None), type(False))):
                 _d[d.address]['Version'] = d.version
+            if hasattr(d, 'properties') and \
+                isinstance(d.properties, dict) and d.properties:
+                _d[d.address]['Properties'] = d.properties
             o['Bus Devices'].append(_d)
 
     print()

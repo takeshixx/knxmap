@@ -226,7 +226,8 @@ class KnxScanner:
                             type=desc_type,
                             version=desc_version,
                             device_serial=serial,
-                            manufacturer=manufacturer)
+                            manufacturer=manufacturer,
+                            properties=properties)
                         self.bus_devices.add(t)
 
                     # Properly close the TPCI layer
