@@ -68,6 +68,28 @@ class KnxScanner:
         return self.bus_queues[gateway]
 
     @asyncio.coroutine
+    def bruteforce_auth_key(self, knx_gateway, target):
+        if isinstance(target, set):
+            target = list(target)[0]
+        future = asyncio.Future()
+        transport, protocol = yield from self.loop.create_datagram_endpoint(
+            functools.partial(KnxTunnelConnection, future),
+            remote_addr=(knx_gateway[0], knx_gateway[1]))
+        self.bus_protocols.append(protocol)
+
+        # Make sure the tunnel has been established
+        connected = yield from future
+        alive = yield from protocol.tpci_connect(target)
+
+        # Bruteforce the key via A_Authorize_Request messages
+        # for key in range(0, 0xffffffff):
+        for key in [0x11223344, 0x12345678, 0x00000000, 0x87654321, 0x11111111, 0xffffffff]:
+            access_level = yield from protocol.apci_authenticate(target, key)
+            if access_level == 0:
+                print("GOT THE KEY: {}".format(format(key, '08x')))
+                break
+
+    @asyncio.coroutine
     def knx_bus_worker(self, transport, protocol, queue):
         """A worker for communicating with devices on the bus."""
         try:
@@ -122,6 +144,12 @@ class KnxScanner:
 
                         if isinstance(serial, (str, bytes)):
                             serial = codecs.encode(serial, 'hex').decode().upper()
+
+
+                        # If we want to authenticate
+                        # auth_level = yield from protocol.apci_authenticate(
+                        #     target,
+                        #     key=self.auth_key)
 
 
                         ### DEV
@@ -363,8 +391,10 @@ class KnxScanner:
     @asyncio.coroutine
     def scan(self, targets=None, search_mode=False, search_timeout=5, iface=None,
              desc_timeout=2, desc_retries=2, bus_targets=None, bus_info=False,
-             bus_monitor_mode=False, group_monitor_mode=False):
+             bus_monitor_mode=False, group_monitor_mode=False, bruteforce_key=False,
+             auth_key=0xffffffff):
         """The function that will be called by run_until_complete(). This is the main coroutine."""
+        self.auth_key = auth_key
         if targets:
             self.set_targets(targets)
 
@@ -386,6 +416,10 @@ class KnxScanner:
             self.bus_protocols.append(protocol)
             yield from future
             LOGGER.info('Stopping bus monitor')
+
+        elif bruteforce_key:
+            tasks = [asyncio.Task(self.bruteforce_auth_key(t, bus_targets), loop=self.loop) for t in self.targets]
+            yield from asyncio.wait(tasks)
 
         else:
             self.desc_timeout = desc_timeout

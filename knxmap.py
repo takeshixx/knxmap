@@ -76,6 +76,13 @@ ARGS.add_argument(
     '-q', '--quiet', action='store_const', const=0, dest='level',
     default=2, help='Only log errors')
 
+ARGS.add_argument(
+    '--bruteforce-key', action='store_true', dest='bruteforce_key',
+    default=False, help='Bruteforce the access control key')
+ARGS.add_argument(
+    '--auth-key', action='store', dest='auth_key', type=int,
+    default=0xffffffff, help='Authorize key for System 2 and System 7 devices')
+
 
 def main():
     args = ARGS.parse_args()
@@ -113,7 +120,9 @@ def main():
             bus_info=args.bus_info,
             bus_monitor_mode=args.bus_monitor_mode,
             group_monitor_mode=args.group_monitor_mode,
-            iface=args.iface))
+            iface=args.iface,
+            bruteforce_key=args.bruteforce_key,
+            auth_key=args.auth_key))
     except KeyboardInterrupt:
         for t in asyncio.Task.all_tasks():
             t.cancel()
