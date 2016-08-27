@@ -81,193 +81,143 @@ class KnxScanner:
                 alive = yield from protocol.tpci_connect(target)
 
                 if alive:
-                    # DeviceDescriptorRead
-                    tunnel_request = protocol.make_tunnel_request(target)
-                    tunnel_request.apci_device_descriptor_read(sequence=protocol.tpci_seq_counts.get(target))
-                    descriptor = yield from protocol.send_data(tunnel_request.get_message(), target)
+                    properties = dict()
+                    serial = None
 
-                    if not isinstance(descriptor, KnxTunnellingRequest) or not \
-                            descriptor.body.get('cemi').get('apci') == CEMI_APCI_TYPES.get('A_DeviceDescriptor_Response'):
+                    # DeviceDescriptorRead
+                    descriptor = yield from protocol.apci_device_descriptor_read(target)
+                    if not descriptor:
                         tunnel_request = protocol.make_tunnel_request(target)
                         tunnel_request.tpci_unnumbered_control_data('DISCONNECT')
                         protocol.send_data(tunnel_request.get_message(), target)
                         queue.task_done()
                         continue
 
-                    ret = yield from protocol.tpci_send_ncd(target)
-                    if not ret:
-                        # TODO: if this is False, can we continue with the KNX connection?
-                        LOGGER.error('ERROR OCCURED AFTER READING DEVICE DESCRIPTOR')
+                    if not self.bus_info:
+                        t = KnxBusTargetReport(address=target)
+                        self.bus_devices.add(t)
+                        tunnel_request = protocol.make_tunnel_request(target)
+                        tunnel_request.tpci_unnumbered_control_data('DISCONNECT')
+                        protocol.send_data(tunnel_request.get_message(), target)
+                        queue.task_done()
+                        continue
 
-                    if isinstance(descriptor, KnxTunnellingRequest) and \
-                                descriptor.body.get('cemi').get('apci') == \
-                                CEMI_APCI_TYPES.get('A_DeviceDescriptor_Response') and \
-                                not self.bus_info:
-                            t = KnxBusTargetReport(address=target)
-                            self.bus_devices.add(t)
-                            tunnel_request = protocol.make_tunnel_request(target)
-                            tunnel_request.tpci_unnumbered_control_data('DISCONNECT')
-                            protocol.send_data(tunnel_request.get_message(), target)
-                            queue.task_done()
-                            continue
-
-                    dev_desc = struct.unpack('!H', descriptor.body.get('cemi').get('data'))[0]
+                    dev_desc = struct.unpack('!H', descriptor)[0]
                     desc_medium, desc_type, desc_version = KnxMessage.parse_device_descriptor(dev_desc)
-                    manufacturer = None
-                    serial = None
 
                     if desc_type > 1:
                         # Read System 2 and System 7 manufacturer ID object
-                        tunnel_request = protocol.make_tunnel_request(target)
-                        tunnel_request.apci_property_value_read(
-                            sequence=protocol.tpci_seq_counts.get(target),
-                            object_index=0,
+                        manufacturer = yield from protocol.apci_property_value_read(
+                            target,
                             property_id=DEVICE_OBJECTS.get('PID_MANUFACTURER_ID'))
-                        manufacturer = yield from protocol.send_data(tunnel_request.get_message(), target)
-                        if isinstance(manufacturer, KnxTunnellingRequest):
-                            if manufacturer.body.get('cemi').get('data'):
-                                print(manufacturer.body.get('cemi'))
-                                manufacturer = manufacturer.body.get('cemi').get('data')[4:]
-                            else:
-                                LOGGER.info('manufacturer: data not included')
-                        else:
-                            LOGGER.info('NOT KnxTunnellingRequest: {}'.format(manufacturer))
-                    else:
-                        # Try to MemoryRead the manufacturer ID on System 1 devices.
-                        # Note: System 1 devices do not support access controls, so
-                        # an authorization request is not needed.
-                        tunnel_request = protocol.make_tunnel_request(target)
-                        tunnel_request.apci_memory_read(
-                            sequence=protocol.tpci_seq_counts.get(target),
-                            memory_address=0x0104,
-                            read_count=1)
-                        manufacturer = yield from protocol.send_data(tunnel_request.get_message(), target)
-                        if isinstance(manufacturer, KnxTunnellingRequest):
-                            if manufacturer.body.get('cemi').get('data'):
-                                manufacturer = manufacturer.body.get('cemi').get('data')[2:]
-                            else:
-                                LOGGER.info('manufacturer: data not included')
-                        else:
-                            LOGGER.info('NOT KnxTunnellingRequest: {}'.format(manufacturer))
 
-                    ret = yield from protocol.tpci_send_ncd(target)
-                    if not ret:
-                        manufacturer = 'COULD NOT READ MANUFACTURER'
-                    else:
                         if isinstance(manufacturer, (str, bytes)):
                             manufacturer = int.from_bytes(manufacturer, 'big')
                             manufacturer = get_manufacturer_by_id(manufacturer)
 
-                    if desc_type == 1:
-                        # MemoryRead application program
-                        tunnel_request = protocol.make_tunnel_request(target)
-                        tunnel_request.apci_memory_read(
-                            sequence=protocol.tpci_seq_counts.get(target),
-                            memory_address=0x0105,
-                            read_count=4)
-                        device_id = yield from protocol.send_data(tunnel_request.get_message(), target)
-                        if isinstance(device_id, KnxTunnellingRequest):
-                            if device_id.body.get('cemi').get('data'):
-                                device_id = device_id.body.get('cemi').get('data')[2:]
-                            else:
-                                LOGGER.info('application_program: data not included')
-                        else:
-                            LOGGER.info('NOT KnxTunnellingRequest: {}'.format(device_id))
-                        yield from protocol.tpci_send_ncd(target)
-
-                        # TODO: is this comparable to an actual serial?
-                        serial = codecs.encode(device_id, 'hex')
-
-                    if desc_type > 1:
                         # Read the serial number object on System 2 and System 7 devices
-                        tunnel_request = protocol.make_tunnel_request(target)
-                        tunnel_request.apci_property_value_read(
-                            sequence=protocol.tpci_seq_counts.get(target),
-                            object_index=0,
+                        serial = yield from protocol.apci_property_value_read(
+                            target,
                             property_id=DEVICE_OBJECTS.get('PID_SERIAL_NUMBER'))
-                        serial = yield from protocol.send_data(tunnel_request.get_message(), target)
-                        if isinstance(serial, KnxTunnellingRequest):
-                            if serial.body.get('cemi').get('data'):
-                                serial = serial.body.get('cemi').get('data')[4:]
-                            else:
-                                LOGGER.info('serial: data not included')
-                        else:
-                            LOGGER.info('NOT KnxTunnellingRequest: {}'.format(serial))
 
-                        ret = yield from protocol.tpci_send_ncd(target)
-                        if not ret:
-                            serial = 'COULD NOT READ SERIAL'
-                        else:
-                            if isinstance(serial, (str, bytes)):
-                                serial = codecs.encode(serial, 'hex').decode().upper()
+                        if isinstance(serial, (str, bytes)):
+                            serial = codecs.encode(serial, 'hex').decode().upper()
 
-                        # DEV
 
-                        # PropertyValueRead
-                        # tunnel_request = protocol.make_tunnel_request(target)
-                        # tunnel_request.apci_property_value_read(
-                        #     sequence=protocol.tpci_seq_counts.get(target),
-                        #     object_index=2,
-                        #     num_elements=1,
-                        #     start_index=0,
-                        #     property_id=52)
-                        # additional = yield from protocol.send_data(tunnel_request.get_message(), target)
-                        # print("ADDITIONAL ADDRESSES")
-                        # print(additional)
-                        # if isinstance(additional, KnxTunnellingRequest):
-                        #     print(additional.body)
-                        # else:
-                        #     LOGGER.info('NOT KnxTunnellingRequest: {}'.format(additional))
+                        ### DEV
+                        # enumerate all objects
+                        # for prop in DEVICE_OBJECTS.keys():
+                        #     ret = yield from protocol.apci_property_value_read(
+                        #         target,
+                        #         property_id=DEVICE_OBJECTS.get(prop),
+                        #         object_index=0)
+                        #     if ret:
+                        #         properies[prop.replace('PID_', '')] = ret
                         #
-                        # # NCD
-                        # ret = yield from protocol.tpci_send_ncd(target)
-                        #
-                        # if not ret:
-                        #     serial = 'COULD NOT READ ADDITIONAL INDIVIDUAL ADDRESSES'
-                        # else:
-                        #     if isinstance(serial, (str, bytes)):
-                        #         serial = codecs.encode(serial, 'hex').decode().upper()
+                        # for prop in PARAMETER_OBJECTS.keys():
+                        #     ret = yield from protocol.apci_property_value_read(
+                        #         target,
+                        #         property_id=PARAMETER_OBJECTS.get(prop),
+                        #         object_index=11)
+                        #     if ret:
+                        #         properies[prop.replace('PID_', '')] = ret
 
 
-                        # Memory read device state
-                        # tunnel_request = protocol.make_tunnel_request(target)
-                        # tunnel_request.apci_memory_read(
-                        #     sequence=protocol.tpci_seq_counts.get(target),
-                        #     memory_address=0x0060,
-                        #     read_count=1)
-                        # run_state = yield from protocol.send_data(tunnel_request.get_message(), target)
-                        # yield from protocol.tpci_send_ncd(target)
-                        # if isinstance(run_state, KnxTunnellingRequest):
-                        #     if run_state.body.get('cemi').get('data'):
-                        #         run_state = run_state.body.get('cemi').get('data')[2:]
-                        #     else:
-                        #         LOGGER.info('run_state: data not included')
-                        # else:
-                        #     LOGGER.info('NOT KnxTunnellingRequest: {}'.format(run_state))
+                        # for object_index in range(0, 11):
+                        #     for prop in DEVICE_OBJECTS.keys():
+                        #         ret = yield from protocol.apci_property_value_read(
+                        #             target,
+                        #             property_id=DEVICE_OBJECTS.get(prop),
+                        #             object_index=object_index)
+                        #         if ret:
+                        #             properties[prop.replace('PID_', '')] = ret
                         #
-                        # print("RUN STATE")
-                        # print(run_state)
+                        #     for prop in PARAMETER_OBJECTS.keys():
+                        #         ret = yield from protocol.apci_property_value_read(
+                        #             target,
+                        #             property_id=PARAMETER_OBJECTS.get(prop),
+                        #             object_index=object_index)
+                        #         if ret:
+                        #             properties[prop.replace('PID_', '')] = ret
 
-                        # for obj in range(1,20):
-                        #     for prop in range(1,150):
-                        #         tunnel_request = protocol.make_tunnel_request(target)
-                        #         tunnel_request.apci_property_value_read(
-                        #             sequence=protocol.tpci_seq_counts.get(target),
-                        #             object_index=obj,
-                        #             start_index=1,
-                        #             property_id=prop)
-                        #         prop_ret = yield from protocol.send_data(tunnel_request.get_message(), target)
-                        #         if isinstance(prop_ret, KnxTunnellingRequest):
-                        #             print("--- obj: {}, prop: {}".format(obj, prop))
-                        #             if prop_ret.body:
-                        #                 #print(prop_ret.body)
-                        #                 print("property data: {}".format(prop_ret.body.get('cemi').get('data')[2:]))
-                        #             print("---")
-                        #         else:
-                        #             LOGGER.debug('unknown response for obj: {}, prop: {}'.format(obj, prop))
-                        #
-                        #         # NCD
-                        #         ret = yield from protocol.tpci_send_ncd(target)
+                    else:
+                        # Try to MemoryRead the manufacturer ID on System 1 devices.
+                        # Note: System 1 devices do not support access controls, so
+                        # an authorization request is not needed.
+                        manufacturer = yield from protocol.apci_memory_read(
+                            target,
+                            memory_address=0x0104,
+                            read_count=1)
+
+                        if isinstance(manufacturer, (str, bytes)):
+                            manufacturer = int.from_bytes(manufacturer, 'big')
+                            manufacturer = get_manufacturer_by_id(manufacturer)
+
+                        ret = yield from protocol.apci_memory_read(
+                            target,
+                            memory_address = 0x0105,
+                            read_count=2)
+                        if ret:
+                            properties['DevTyp'] = codecs.encode(ret, 'hex')
+
+                        ret = yield from protocol.apci_memory_read(
+                            target,
+                            memory_address = 0x0101,
+                            read_count=3)
+                        if ret:
+                            properties['ManData'] = codecs.encode(ret, 'hex')
+
+                        ret = yield from protocol.apci_memory_read(
+                            target,
+                            memory_address = 0x0108,
+                            read_count=1)
+                        if ret:
+                            properties['CheckLim'] = codecs.encode(ret, 'hex')
+
+                        ret = yield from protocol.apci_memory_read(
+                            target,
+                            memory_address = 0x01FE,
+                            read_count=1)
+                        if ret:
+                            properties['UsrPrg'] = codecs.encode(ret, 'hex')
+
+                        ret = yield from protocol.apci_memory_read(
+                            target,
+                            memory_address = 0x0116,
+                            read_count=4)
+                        if ret:
+                            properties['AdrTab'] = codecs.encode(ret, 'hex')
+
+                        start_addr = 0x0100
+                        properties['DUMP'] = b''
+                        for i in range(51):
+                            ret = yield from protocol.apci_memory_read(
+                                target,
+                                memory_address = start_addr,
+                                read_count=5)
+                            if ret:
+                                properties['EEPROM_DUMP'] += codecs.encode(ret, 'hex')
+                            start_addr += 5
 
                     if descriptor:
                         t = KnxBusTargetReport(
