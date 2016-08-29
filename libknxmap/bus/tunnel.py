@@ -389,3 +389,15 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             return int.from_bytes(auth.body.get('cemi').get('data'), 'big')
         else:
             return False
+
+    @asyncio.coroutine
+    def apci_group_value_write(self, target, value=0):
+        tunnel_request = self.make_tunnel_request(target)
+        tunnel_request.apci_group_value_write(value=value)
+        value = yield from self.send_data(tunnel_request.get_message(), target)
+        yield from self.tpci_send_ncd(target)
+        if isinstance(value, KnxTunnellingRequest) and \
+                value.body.get('cemi').get('data'):
+            return value.body.get('cemi').get('data')[4:]
+        else:
+            return False

@@ -400,12 +400,73 @@ class KnxMessage(object):
         cf['address_type'] = (data >> 7) & 1
         return cf
 
-    def _pack_cemi(self, message_code=None):
+    @staticmethod
+    def pack_cemi_runstate(prog_mode=False, link_layer_active=False, transport_layer_active=False,
+                           app_layer_active=False, serial_interface_active=False, user_app_run=False,
+                           bcu_download_mode=False, parity=0):
+        """Pack runstate field of the cEMI message.
+
+        Bit  |
+        ------+---------------------------------------------------------------
+          7   | Parity
+              | Even parity for bit 0-6
+        ------+---------------------------------------------------------------
+          6   | DM
+              | BCU in download mode
+        ------+---------------------------------------------------------------
+          5   | UE
+              | User application running
+        ------+---------------------------------------------------------------
+          4   | SE
+              | Serial interface active
+        ------+---------------------------------------------------------------
+          3   | ALE
+              | Application layer active
+        ------+---------------------------------------------------------------
+          2   | TLE
+              | Transport layer active
+        ------+---------------------------------------------------------------
+          1   | LLM
+              | Link layer active
+        ------+---------------------------------------------------------------
+          0   | PROG
+              | Device is in programming mode
+        ------+---------------------------------------------------------------"""
+        state = 0
+        state |= (1 if prog_mode else 0) << 0
+        state |= (1 if link_layer_active else 0) << 1
+        state |= (1 if transport_layer_active else 0) << 2
+        state |= (1 if app_layer_active else 0) << 3
+        state |= (1 if serial_interface_active else 0) << 4
+        state |= (1 if user_app_run else 0) << 5
+        state |= (1 if bcu_download_mode else 0) << 6
+        for i in range(7):
+            parity ^= (state >> i) & 1
+        state |= parity << 7
+        return state
+
+    @staticmethod
+    def unpack_cemi_runstate(data):
+        """Parse runstate field to a drict."""
+        #state = dict()
+        state = collections.OrderedDict()
+        state['PROG_MODE'] = (data >> 0) & 1
+        state['LINK_LAYER'] = (data >> 1) & 1
+        state['TRANSPORT_LAYER'] = (data >> 2) & 1
+        state['APP_LAYER'] = (data >> 3) & 1
+        state['SERIAL_INTERFACE'] = (data >> 4) & 1
+        state['USER_APP'] = (data >> 5) & 1
+        state['BC_DM'] = (data >> 6) & 1
+        # We don't really care about the parity
+        #state['parity'] = (data >> 7) & 1
+        return state
+
+    def _pack_cemi(self, message_code=None, *args, **kwargs):
         message_code = message_code if message_code else self.cemi_message_code
         cemi = struct.pack('!B', message_code) # cEMI message code
         cemi += struct.pack('!B', 0) # add information length # TODO: implement variable length if additional information is included
         cemi += struct.pack('!B', self.pack_cemi_cf1()) # controlfield 1
-        cemi += struct.pack('!B', self.pack_cemi_cf2()) # controlfield 2
+        cemi += struct.pack('!B', self.pack_cemi_cf2(*args, **kwargs)) # controlfield 2
         cemi += struct.pack('!H', self.knx_source) # source address (KNX address)
         cemi += struct.pack('!H', self.knx_destination) # KNX destination address (either group or physical)
         return cemi
@@ -868,34 +929,6 @@ class KnxTunnellingRequest(KnxMessage):
         """A_Memory_Read
 
         0x0060 -> run state
-
-              Bit  |
-             ------+---------------------------------------------------------------
-               7   | Parity
-                   | Even parity for bit 0-6
-             ------+---------------------------------------------------------------
-               6   | DM
-                   | BCU in download mode
-             ------+---------------------------------------------------------------
-               5   | UE
-                   | User application running
-             ------+---------------------------------------------------------------
-               4   | SE
-                   | Serial interface active
-             ------+---------------------------------------------------------------
-               3   | ALE
-                   | Application layer active
-             ------+---------------------------------------------------------------
-               2   | TLE
-                   | Transport layer active
-             ------+---------------------------------------------------------------
-               1   | LLM
-                   | Link layer active
-             ------+---------------------------------------------------------------
-               0   | PROG
-                   | Device is in programming mode
-             ------+---------------------------------------------------------------
-
         0x010d  -> run error
 
 
@@ -967,6 +1000,16 @@ class KnxTunnellingRequest(KnxMessage):
         npdu |= read_count << 0 # number of octets to read/write
         cemi += struct.pack('!H', npdu)
         cemi += struct.pack('!H', memory_address)  # memory address
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def apci_group_value_write(self, value=0):
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'), address_type=True)
+        cemi += struct.pack('!B', 1)  # Data length
+        npdu = CEMI_TPCI_TYPES.get('UDP') << 14
+        npdu |= CEMI_APCI_TYPES['A_GroupValue_Write'] << 6
+        npdu |= value  << 0
+        cemi += struct.pack('!H', npdu)
         self._pack_knx_body(cemi)
         self.pack_knx_message()
 
