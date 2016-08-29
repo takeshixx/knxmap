@@ -25,7 +25,6 @@ LOGGER = logging.getLogger(__name__)
 # TODO: create proper arguments
 # TODO: add subcommands for scanning modes?
 # TODO: add dump-file argument for monitoring modes
-# TODO: implement key bruteforcing for authorization request PINs
 ARGS = argparse.ArgumentParser(description="KNXnet/IP network and bus mapper")
 # General options
 ARGS.add_argument(
