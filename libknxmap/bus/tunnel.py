@@ -191,7 +191,6 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             elif cemi_msg_code == CEMI_MSG_CODES.get('L_Data.ind'):
 
                 if cemi_tpci_type == CEMI_TPCI_TYPES.get('UCD'):
-
                     if knx_msg.body.get('cemi').get('tpci').get('status') is 1:
                         # TODO: why checking status here? pls document why
                         if knx_dst in self.target_futures.keys():
@@ -355,10 +354,29 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             start_index=start_index)
         value = yield from self.send_data(tunnel_request.get_message(), target)
         yield from self.tpci_send_ncd(target)
-        if isinstance(value, KnxTunnellingRequest):
-            if value.body.get('cemi').get('data'):
+        if isinstance(value, KnxTunnellingRequest) and \
+            value.body.get('cemi').get('data'):
                 return value.body.get('cemi').get('data')[4:]
-        return False
+        else:
+            return False
+
+    @asyncio.coroutine
+    def apci_property_description_read(self, target, object_index=0, property_id=0x0f,
+                                 num_elements=1, start_index=1):
+        tunnel_request = self.make_tunnel_request(target)
+        tunnel_request.apci_property_description_read(
+            sequence=self.tpci_seq_counts.get(target),
+            object_index=object_index,
+            property_id=property_id,
+            num_elements=num_elements,
+            start_index=start_index)
+        value = yield from self.send_data(tunnel_request.get_message(), target)
+        yield from self.tpci_send_ncd(target)
+        if isinstance(value, KnxTunnellingRequest) and \
+            value.body.get('cemi').get('data'):
+                return value.body.get('cemi').get('data')[4:]
+        else:
+            return False
 
     @asyncio.coroutine
     def apci_memory_read(self, target, memory_address=0x0060, read_count=1):
@@ -369,10 +387,11 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             read_count=read_count)
         value = yield from self.send_data(tunnel_request.get_message(), target)
         yield from self.tpci_send_ncd(target)
-        if isinstance(value, KnxTunnellingRequest):
-            if value.body.get('cemi').get('data'):
+        if isinstance(value, KnxTunnellingRequest) and \
+            value.body.get('cemi').get('data'):
                 return value.body.get('cemi').get('data')[2:]
-        return False
+        else:
+            return False
 
     @asyncio.coroutine
     def apci_authenticate(self, target, key=0xffffffff):
