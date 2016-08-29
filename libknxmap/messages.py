@@ -810,7 +810,7 @@ class KnxTunnellingRequest(KnxMessage):
         self.pack_knx_message()
 
     def apci_property_value_read(self, sequence=0, object_index=0, property_id=0x0f,
-                                 num_elements=1, start_index=0):
+                                 num_elements=1, start_index=1):
         """A_PropertyValue_Read
 
         object index: 0x00, property id: 0x0f -> order number
@@ -835,7 +835,7 @@ class KnxTunnellingRequest(KnxMessage):
         self.pack_knx_message()
 
     def apci_property_description_read(self, sequence=0, object_index=0, property_id=0x0f,
-                                       num_elements=1, start_index=0):
+                                       num_elements=1, start_index=1):
         """A_PropertyDescription_Read"""
         cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 5)  # Data length

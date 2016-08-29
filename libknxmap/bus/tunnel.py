@@ -337,14 +337,15 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         value = yield from self.send_data(tunnel_request.get_message(), target)
         yield from self.tpci_send_ncd(target)
         if isinstance(value, KnxTunnellingRequest) and \
-                value.body.get('cemi').get('apci') == CEMI_APCI_TYPES.get('A_DeviceDescriptor_Response'):
-            if value.body.get('cemi').get('data'):
+            value.body.get('cemi').get('apci') == CEMI_APCI_TYPES.get('A_DeviceDescriptor_Response') and \
+            value.body.get('cemi').get('data'):
                 return value.body.get('cemi').get('data')
-        return False
+        else:
+            return False
 
     @asyncio.coroutine
     def apci_property_value_read(self, target, object_index=0, property_id=0x0f,
-                                 num_elements=1, start_index=0):
+                                 num_elements=1, start_index=1):
         tunnel_request = self.make_tunnel_request(target)
         tunnel_request.apci_property_value_read(
             sequence=self.tpci_seq_counts.get(target),
