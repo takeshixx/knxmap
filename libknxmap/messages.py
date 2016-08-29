@@ -285,7 +285,8 @@ class KnxMessage(object):
         dib_dev_info['structure_length'] = self._unpack_stream('!B', message)
         dib_dev_info['description_type'] = self._unpack_stream('!B', message)
         dib_dev_info['knx_medium'] = self._unpack_stream('!B', message)
-        dib_dev_info['device_status'] = 'PROGMODE_ON' if self._unpack_stream('!B', message) else 'PROGMODE_OFF'
+        #dib_dev_info['device_status'] = 'PROGMODE_ON' if self._unpack_stream('!B', message) else 'PROGMODE_OFF'
+        dib_dev_info['device_status'] = self.unpack_cemi_runstate(self._unpack_stream('!B', message))
         dib_dev_info['knx_address'] = self.parse_knx_address(self._unpack_stream('!H', message))
         dib_dev_info['project_install_identifier'] = self._unpack_stream('!H', message)
         dib_dev_info['knx_device_serial'] = self.parse_knx_device_serial(

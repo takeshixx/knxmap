@@ -103,7 +103,7 @@ class KnxScanner:
                 alive = yield from protocol.tpci_connect(target)
 
                 if alive:
-                    properties = dict()
+                    properties = collections.OrderedDict()
                     serial = None
 
                     # DeviceDescriptorRead
@@ -237,7 +237,7 @@ class KnxScanner:
                             properties['AdrTab'] = codecs.encode(ret, 'hex')
 
                         start_addr = 0x0100
-                        properties['DUMP'] = b''
+                        properties['EEPROM_DUMP'] = b''
                         for i in range(51):
                             ret = yield from protocol.apci_memory_read(
                                 target,
