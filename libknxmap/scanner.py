@@ -132,61 +132,49 @@ class KnxScanner:
                         manufacturer = yield from protocol.apci_property_value_read(
                             target,
                             property_id=DEVICE_OBJECTS.get('PID_MANUFACTURER_ID'))
-
                         if isinstance(manufacturer, (str, bytes)):
                             manufacturer = int.from_bytes(manufacturer, 'big')
                             manufacturer = get_manufacturer_by_id(manufacturer)
+
+                        # Read the device state
+                        device_state = yield from protocol.apci_memory_read(
+                            target,
+                            memory_address=0x0060)
+                        if device_state:
+                            properties['DEVICE_STATE'] = KnxMessage.unpack_cemi_runstate(int.from_bytes(device_state, 'big'))
 
                         # Read the serial number object on System 2 and System 7 devices
                         serial = yield from protocol.apci_property_value_read(
                             target,
                             property_id=DEVICE_OBJECTS.get('PID_SERIAL_NUMBER'))
-
                         if isinstance(serial, (str, bytes)):
                             serial = codecs.encode(serial, 'hex').decode().upper()
 
+
+                        # DEV - group value write
+                        r = yield from protocol.apci_group_value_write('0.0.4', value=1)
+                        r = yield from protocol.apci_group_value_write('0.0.4', value=0)
+                        r = yield from protocol.apci_group_value_write('0.0.4', value=1)
+                        r = yield from protocol.apci_group_value_write('0.0.4', value=0)
+                        r = yield from protocol.apci_group_value_write('0.0.4', value=1)
+                        r = yield from protocol.apci_group_value_write('0.0.4', value=0)
 
                         # If we want to authenticate
                         # auth_level = yield from protocol.apci_authenticate(
                         #     target,
                         #     key=self.auth_key)
 
-
-                        ### DEV
-                        # enumerate all objects
-                        # for prop in DEVICE_OBJECTS.keys():
-                        #     ret = yield from protocol.apci_property_value_read(
-                        #         target,
-                        #         property_id=DEVICE_OBJECTS.get(prop),
-                        #         object_index=0)
-                        #     if ret:
-                        #         properies[prop.replace('PID_', '')] = ret
-                        #
-                        # for prop in PARAMETER_OBJECTS.keys():
-                        #     ret = yield from protocol.apci_property_value_read(
-                        #         target,
-                        #         property_id=PARAMETER_OBJECTS.get(prop),
-                        #         object_index=11)
-                        #     if ret:
-                        #         properies[prop.replace('PID_', '')] = ret
-
-
-                        # for object_index in range(0, 11):
-                        #     for prop in DEVICE_OBJECTS.keys():
-                        #         ret = yield from protocol.apci_property_value_read(
-                        #             target,
-                        #             property_id=DEVICE_OBJECTS.get(prop),
-                        #             object_index=object_index)
-                        #         if ret:
-                        #             properties[prop.replace('PID_', '')] = ret
-                        #
-                        #     for prop in PARAMETER_OBJECTS.keys():
-                        #         ret = yield from protocol.apci_property_value_read(
-                        #             target,
-                        #             property_id=PARAMETER_OBJECTS.get(prop),
-                        #             object_index=object_index)
-                        #         if ret:
-                        #             properties[prop.replace('PID_', '')] = ret
+                        for object_index, props in OBJECTS.items():
+                            x = collections.OrderedDict()
+                            for k, v in props.items():
+                                ret = yield from protocol.apci_property_value_read(
+                                    target,
+                                    property_id=v,
+                                    object_index=object_index)
+                                if ret:
+                                    x[k.replace('PID_', '')] = codecs.encode(ret, 'hex')
+                            if x:
+                                properties[OBJECT_TYPES.get(object_index)] = x
 
                     else:
                         # Try to MemoryRead the manufacturer ID on System 1 devices.
@@ -196,10 +184,15 @@ class KnxScanner:
                             target,
                             memory_address=0x0104,
                             read_count=1)
-
                         if isinstance(manufacturer, (str, bytes)):
                             manufacturer = int.from_bytes(manufacturer, 'big')
                             manufacturer = get_manufacturer_by_id(manufacturer)
+
+                        device_state = yield from protocol.apci_memory_read(
+                            target,
+                            memory_address=0x0060)
+                        if device_state:
+                            properties['DEVICE_STATE'] = codecs.encode(device_state, 'hex')
 
                         ret = yield from protocol.apci_memory_read(
                             target,
