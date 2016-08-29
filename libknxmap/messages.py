@@ -352,6 +352,21 @@ class KnxMessage(object):
         return cf
 
     @staticmethod
+    def unpack_cemi_cf1(data):
+        """Parse controlfield1 to a drict."""
+        cf = dict()
+        cf['confirm'] = (data >> 0) & 1
+        cf['acknowledge_req'] = (data >> 1) & 1
+        cf['priority'] = 0
+        cf['priority'] |= ((data >> 2) & 1) << 0
+        cf['priority'] |= ((data >> 3) & 1) << 1
+        cf['system_broadcast'] = (data >> 4) & 1
+        cf['repeat_flag'] = (data >> 5) & 1
+        cf['reserved'] = (data >> 6) & 1
+        cf['frame_type'] = (data >> 7) & 1
+        return cf
+
+    @staticmethod
     def pack_cemi_cf2(ext_frame_format=0x00, hop_count=6, address_type=False):
         """Pack controlfield2 of the cEMI message.
 
@@ -368,21 +383,6 @@ class KnxMessage(object):
         cf |= ext_frame_format << 0
         cf |= hop_count << 4
         cf |= (1 if address_type else 0) << 7
-        return cf
-
-    @staticmethod
-    def unpack_cemi_cf1(data):
-        """Parse controlfield1 to a drict."""
-        cf = dict()
-        cf['confirm'] = (data >> 0) & 1
-        cf['acknowledge_req'] = (data >> 1) & 1
-        cf['priority'] = 0
-        cf['priority'] |= ((data >> 2) & 1) << 0
-        cf['priority'] |= ((data >> 3) & 1) << 1
-        cf['system_broadcast'] = (data >> 4) & 1
-        cf['repeat_flag'] = (data >> 5) & 1
-        cf['reserved'] = (data >> 6) & 1
-        cf['frame_type'] = (data >> 7) & 1
         return cf
 
     @staticmethod
