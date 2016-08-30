@@ -9,6 +9,7 @@ __all__ = ['KNX_CONSTANTS',
            'KNX_BUS_MEDIUMS',
            'DEVICE_TYPES',
            'KNX_MESSAGE_TYPES',
+           '_KNX_MESSAGE_TYPES',
            'KNX_STATUS_CODES',
            'CEMI_PRIMITIVES',
            'CEMI_MSG_CODES',  # TODO: maybe find a better solution instead of having the same dict twice
@@ -594,7 +595,6 @@ OBJECTS = {
 for k, v in OBJECTS.items():
     OBJECTS[k] = collections.OrderedDict(
         sorted(v.items(), key=lambda v: v[1]))
-
 
 
 class Error(Exception):
