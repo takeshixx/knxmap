@@ -188,9 +188,20 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                                           CEMI_APCI_TYPES.get('A_PropertyValue_Read')]:
                         self.loop.call_later(3, self.process_target, knx_dst, False, knx_msg)
 
+                elif cemi_tpci_type == CEMI_TPCI_TYPES.get('UDP'):
+                    # After e.g. an A_GroupValue_Write we just get a
+                    # L_Data.con for a UDP.
+                    if knx_dst in self.target_futures.keys() and \
+                        not self.target_futures[knx_dst].done():
+                            self.target_futures[knx_dst].set_result(False)
+                            del self.target_futures[knx_dst]
+                    else:
+                        self.response_queue.append(knx_msg)
+
             elif cemi_msg_code == CEMI_MSG_CODES.get('L_Data.ind'):
 
                 if cemi_tpci_type == CEMI_TPCI_TYPES.get('UCD'):
+
                     if knx_msg.body.get('cemi').get('tpci').get('status') is 1:
                         # TODO: why checking status here? pls document why
                         if knx_dst in self.target_futures.keys():
@@ -414,7 +425,6 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         tunnel_request = self.make_tunnel_request(target)
         tunnel_request.apci_group_value_write(value=value)
         value = yield from self.send_data(tunnel_request.get_message(), target)
-        yield from self.tpci_send_ncd(target)
         if isinstance(value, KnxTunnellingRequest) and \
                 value.body.get('cemi').get('data'):
             return value.body.get('cemi').get('data')[4:]
