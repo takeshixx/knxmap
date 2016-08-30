@@ -558,6 +558,204 @@ class KnxMessage(object):
         # TODO: read cemi['npdu_len']-1 bytes
         return cemi
 
+    def tpci_unnumbered_control_data(self, ucd_type):
+        TYPES = {'CONNECT': 0x00,
+                 'DISCONNECT': 0x01}
+        assert ucd_type in TYPES.keys(), 'Invalid UCD type: {}'.format(ucd_type)
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 0) # Data length
+        npdu = CEMI_TPCI_TYPES.get('UCD') << 14
+        npdu |= TYPES.get(ucd_type) << 8
+        cemi += struct.pack('!H', npdu)
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def tpci_numbered_control_data(self, ncd_type, sequence=0):
+        TYPES = {'ACK': 0x02,
+                 'NACK': 0x03}
+        assert ncd_type in TYPES.keys(), 'Invalid NCD type: {}'.format(ncd_type)
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 0)  # Data length
+        npdu = CEMI_TPCI_TYPES.get('NCD') << 14
+        npdu |= sequence << 10
+        npdu |= TYPES.get(ncd_type) << 8
+        cemi += struct.pack('!H', npdu)
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def apci_device_descriptor_read(self, sequence=0):
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 1) # Data length
+        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
+        npdu |= sequence << 10
+        npdu |= CEMI_APCI_TYPES['A_DeviceDescriptor_Read'] << 0
+        cemi += struct.pack('!H', npdu)
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def apci_individual_address_read(self, sequence=0):
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 1) # Data length
+        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
+        npdu |= sequence << 10
+        npdu |= CEMI_APCI_TYPES['A_IndividualAddress_Read'] << 0
+        cemi += struct.pack('!H', npdu)
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def apci_authorize_request(self, sequence=0, key=0xffffffff):
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 6)  # Data length
+        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
+        npdu |= sequence << 10
+        npdu |= CEMI_APCI_TYPES['A_Authorize_Request'] << 0
+        cemi += struct.pack('!H', npdu)
+        cemi += struct.pack('!B', 0) # reserved
+        cemi += struct.pack('!I', key) # key
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def apci_property_value_read(self, sequence=0, object_index=0, property_id=0x0f,
+                                 num_elements=1, start_index=1):
+        """A_PropertyValue_Read
+
+        object index: 0x00, property id: 0x0f -> order number
+        object index: 0x00, property id: 0x0b -> serial number
+        object index: 0x03, property id: 0x0d -> application programm, ABB A021 v2.0, 0002a02120
+        object index: 0x03, property id: 0x06 -> 0x01
+        object index: 0x04, property id: 0x0d -> -
+        object index: 0x04, property id: 0x06 -> -
+        """
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 5) # Data length
+        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
+        npdu |= sequence << 10
+        npdu |= CEMI_APCI_TYPES['A_PropertyValue_Read'] << 0
+        cemi += struct.pack('!H', npdu)
+        cemi += struct.pack('!B', object_index) # object index
+        cemi += struct.pack('!B', property_id) # property id
+        count_index = num_elements << 12
+        count_index |= start_index << 0
+        cemi += struct.pack('!H', count_index) # number of elements + start index
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def apci_property_description_read(self, sequence=0, object_index=0, property_id=0x0f,
+                                       num_elements=1, start_index=1):
+        """A_PropertyDescription_Read"""
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 5)  # Data length
+        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
+        npdu |= sequence << 10
+        npdu |= CEMI_APCI_TYPES['A_PropertyDescription_Read'] << 0
+        cemi += struct.pack('!H', npdu)
+        cemi += struct.pack('!B', object_index)  # object index
+        cemi += struct.pack('!B', property_id)  # property id
+        count_index = num_elements << 12
+        count_index |= start_index << 0
+        cemi += struct.pack('!H', count_index)  # number of elements + start index
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def apci_adc_read(self, sequence=0):
+        """A_ADC_Read"""
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 2) # Data length
+        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
+        npdu |= sequence << 10
+        npdu |= CEMI_APCI_TYPES['A_ADC_Read'] << 0
+        npdu |= 1 << 0 # channel nr
+        cemi += struct.pack('!H', npdu)
+        cemi += struct.pack('!B', 0x08)  # data
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def apci_memory_read(self, sequence=0, memory_address=0x0060, read_count=1):
+        """A_Memory_Read
+
+        0x0060 -> run state
+        0x010d -> run error
+
+        EEPROM:
+        0x0100 OptionReg: Option Register (MC68HC05B06)
+        0x0101 ManData: Data provided by the manufacturer of the BCU (see further down) (3 Bytes)
+        0x0104 Manufact: ID of the application manufacturer
+        0x0105 DevTyp: Manufacturer-specific device type ID (2 Bytes)
+        0x0107 Version: Version number of the application program
+        0x0108 CheckLim: Specifies the end address of the EEPROM range that is to be covered by
+                         the system check procedure. The address area to be checked ranges from
+                         $0108 to $100+ChekLim-1.
+        0x0109 PEI type: Type of PEI required for the application program
+        0x010A SyncRate: Baud rate for the PEIs of type 12,14 ‘serial synchronous PEI’
+        0x010B PortCDDR: Defines the directions of data flow of port C for a PEI of type 17 ‘
+                         programmable I/O’
+        0x010C PortADDR: Defines the directions of data flow for port A.
+        0x010D RunError: Runtime error flags
+                          Bit  |
+                         ------+---------------------------------------------------------------
+                           7   | Unknown
+                               |
+                         ------+---------------------------------------------------------------
+                           6   | SYS3_ERR (internal system failure)
+                               | Memory control block broken
+                         ------+---------------------------------------------------------------
+                           5   | SYS2_ERR (internal system failure)
+                               | Temperature
+                         ------+---------------------------------------------------------------
+                           4   | OBJ_ERR
+                               | RAM flag failure
+                         ------+---------------------------------------------------------------
+                           3   | STK_OVL
+                               | Stack overload
+                         ------+---------------------------------------------------------------
+                           2   | EEPROM_ERR
+                               | EEPROM encountered checksum error
+                         ------+---------------------------------------------------------------
+                           1   | SYS1_ERR (internal system failure)
+                               | Wrong parity bit
+                         ------+---------------------------------------------------------------
+                           0   | SYS0_ERR (internal system failure)
+                               | Message buffer offset broken
+                         ------+---------------------------------------------------------------
+        0x010E RouteCnt: Routing counter constant (layer 3), structure:
+                         0ccc0000, ccc = routing counter constant (0 to 7)
+        0x010F MxRstCnt: Contains the INAK and BUSY retries (layer 2), structure:
+                         bbb00iii, bbb=BUSY retries
+                         iii=INAK retries
+        0x0110 ConfigDes: Configuration descriptor (see further down)
+        0x0111 AssocTabPtr: Pointer to the Association Table (layer 7)
+        0x0112 CommsTabPtr: Pointer to the Table of group objects
+        0x0113 UsrInitPtr: Pointer to the initialization routine of the application program
+        0x0114 UsrPrgPtr: Pointer to the application program
+        0x0115 UsrSavPtr: Pointer to the SAVE subroutine of the application program
+        0x0116 AdrTab: Address table (layers 2 and 4)
+                       m = No. of group addresses (1 + (1 + m) * 2 Bytes)
+        ...0x01FE       Application program UsrPrg,
+                        Initialisation program UsrInit,
+                        SAVE subroutine UsrSav
+        0x01FF EE_EXOR: EEPROM checksum for the range to be checked (cp. CheckLim)
+        """
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 3) # Data length
+        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
+        npdu |= sequence << 10
+        npdu |= CEMI_APCI_TYPES['A_Memory_Read'] << 4
+        npdu |= read_count << 0 # number of octets to read/write
+        cemi += struct.pack('!H', npdu)
+        cemi += struct.pack('!H', memory_address)  # memory address
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
+    def apci_group_value_write(self, value=0):
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'), address_type=True)
+        cemi += struct.pack('!B', 1)  # Data length
+        npdu = CEMI_TPCI_TYPES.get('UDP') << 14
+        npdu |= CEMI_APCI_TYPES['A_GroupValue_Write'] << 6
+        npdu |= value  << 0
+        cemi += struct.pack('!H', npdu)
+        self._pack_knx_body(cemi)
+        self.pack_knx_message()
+
 
 class KnxSearchRequest(KnxMessage):
 
@@ -813,206 +1011,6 @@ class KnxTunnellingRequest(KnxMessage):
             self.body['cemi'] = self._unpack_cemi(message)
         except Exception as e:
             LOGGER.exception(e)
-
-    def tpci_unnumbered_control_data(self, ucd_type):
-        TYPES = {'CONNECT': 0x00,
-                 'DISCONNECT': 0x01}
-        assert ucd_type in TYPES.keys(), 'Invalid UCD type: {}'.format(ucd_type)
-        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
-        cemi += struct.pack('!B', 0) # Data length
-        npdu = CEMI_TPCI_TYPES.get('UCD') << 14
-        npdu |= TYPES.get(ucd_type) << 8
-        cemi += struct.pack('!H', npdu)
-        self._pack_knx_body(cemi)
-        self.pack_knx_message()
-
-    def tpci_numbered_control_data(self, ncd_type, sequence=0):
-        TYPES = {'ACK': 0x02,
-                 'NACK': 0x03}
-        assert ncd_type in TYPES.keys(), 'Invalid NCD type: {}'.format(ncd_type)
-        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
-        cemi += struct.pack('!B', 0)  # Data length
-        npdu = CEMI_TPCI_TYPES.get('NCD') << 14
-        npdu |= sequence << 10
-        npdu |= TYPES.get(ncd_type) << 8
-        cemi += struct.pack('!H', npdu)
-        self._pack_knx_body(cemi)
-        self.pack_knx_message()
-
-    def apci_device_descriptor_read(self, sequence=0):
-        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
-        cemi += struct.pack('!B', 1) # Data length
-        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
-        npdu |= sequence << 10
-        npdu |= CEMI_APCI_TYPES['A_DeviceDescriptor_Read'] << 0
-        cemi += struct.pack('!H', npdu)
-        self._pack_knx_body(cemi)
-        self.pack_knx_message()
-
-    def apci_individual_address_read(self, sequence=0):
-        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
-        cemi += struct.pack('!B', 1) # Data length
-        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
-        npdu |= sequence << 10
-        npdu |= CEMI_APCI_TYPES['A_IndividualAddress_Read'] << 0
-        cemi += struct.pack('!H', npdu)
-        self._pack_knx_body(cemi)
-        self.pack_knx_message()
-
-    def apci_authorize_request(self, sequence=0, key=0xffffffff):
-        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
-        cemi += struct.pack('!B', 6)  # Data length
-        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
-        npdu |= sequence << 10
-        npdu |= CEMI_APCI_TYPES['A_Authorize_Request'] << 0
-        cemi += struct.pack('!H', npdu)
-        cemi += struct.pack('!B', 0) # reserved
-        cemi += struct.pack('!I', key) # key
-        self._pack_knx_body(cemi)
-        self.pack_knx_message()
-
-    def apci_property_value_read(self, sequence=0, object_index=0, property_id=0x0f,
-                                 num_elements=1, start_index=1):
-        """A_PropertyValue_Read
-
-        object index: 0x00, property id: 0x0f -> order number
-        object index: 0x00, property id: 0x0b -> serial number
-        object index: 0x03, property id: 0x0d -> application programm, ABB A021 v2.0, 0002a02120
-        object index: 0x03, property id: 0x06 -> 0x01
-        object index: 0x04, property id: 0x0d -> -
-        object index: 0x04, property id: 0x06 -> -
-        """
-        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
-        cemi += struct.pack('!B', 5) # Data length
-        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
-        npdu |= sequence << 10
-        npdu |= CEMI_APCI_TYPES['A_PropertyValue_Read'] << 0
-        cemi += struct.pack('!H', npdu)
-        cemi += struct.pack('!B', object_index) # object index
-        cemi += struct.pack('!B', property_id) # property id
-        count_index = num_elements << 12
-        count_index |= start_index << 0
-        cemi += struct.pack('!H', count_index) # number of elements + start index
-        self._pack_knx_body(cemi)
-        self.pack_knx_message()
-
-    def apci_property_description_read(self, sequence=0, object_index=0, property_id=0x0f,
-                                       num_elements=1, start_index=1):
-        """A_PropertyDescription_Read"""
-        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
-        cemi += struct.pack('!B', 5)  # Data length
-        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
-        npdu |= sequence << 10
-        npdu |= CEMI_APCI_TYPES['A_PropertyDescription_Read'] << 0
-        cemi += struct.pack('!H', npdu)
-        cemi += struct.pack('!B', object_index)  # object index
-        cemi += struct.pack('!B', property_id)  # property id
-        count_index = num_elements << 12
-        count_index |= start_index << 0
-        cemi += struct.pack('!H', count_index)  # number of elements + start index
-        self._pack_knx_body(cemi)
-        self.pack_knx_message()
-
-    def apci_adc_read(self, sequence=0):
-        """A_ADC_Read"""
-        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
-        cemi += struct.pack('!B', 2) # Data length
-        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
-        npdu |= sequence << 10
-        npdu |= CEMI_APCI_TYPES['A_ADC_Read'] << 0
-        npdu |= 1 << 0 # channel nr
-        cemi += struct.pack('!H', npdu)
-        cemi += struct.pack('!B', 0x08)  # data
-        self._pack_knx_body(cemi)
-        self.pack_knx_message()
-
-    def apci_memory_read(self, sequence=0, memory_address=0x0060, read_count=1):
-        """A_Memory_Read
-
-        0x0060 -> run state
-        0x010d  -> run error
-
-
-
-        EEPROM:
-        0x0100 OptionReg: Option Register (MC68HC05B06)
-        0x0101 ManData: Data provided by the manufacturer of the BCU (see further down) (3 Bytes)
-        0x0104 Manufact: ID of the application manufacturer
-        0x0105 DevTyp: Manufacturer-specific device type ID (2 Bytes)
-        0x0107 Version: Version number of the application program
-        0x0108 CheckLim: Specifies the end address of the EEPROM range that is to be covered by
-                         the system check procedure. The address area to be checked ranges from
-                         $0108 to $100+ChekLim-1.
-        0x0109 PEI type: Type of PEI required for the application program
-        0x010A SyncRate: Baud rate for the PEIs of type 12,14 ‘serial synchronous PEI’
-        0x010B PortCDDR: Defines the directions of data flow of port C for a PEI of type 17 ‘
-                         programmable I/O’
-        0x010C PortADDR: Defines the directions of data flow for port A.
-        0x010D RunError: Runtime error flags
-                          Bit  |
-                         ------+---------------------------------------------------------------
-                           7   | Unknown
-                               |
-                         ------+---------------------------------------------------------------
-                           6   | SYS3_ERR (internal system failure)
-                               | Memory control block broken
-                         ------+---------------------------------------------------------------
-                           5   | SYS2_ERR (internal system failure)
-                               | Temperature
-                         ------+---------------------------------------------------------------
-                           4   | OBJ_ERR
-                               | RAM flag failure
-                         ------+---------------------------------------------------------------
-                           3   | STK_OVL
-                               | Stack overload
-                         ------+---------------------------------------------------------------
-                           2   | EEPROM_ERR
-                               | EEPROM encountered checksum error
-                         ------+---------------------------------------------------------------
-                           1   | SYS1_ERR (internal system failure)
-                               | Wrong parity bit
-                         ------+---------------------------------------------------------------
-                           0   | SYS0_ERR (internal system failure)
-                               | Message buffer offset broken
-                         ------+---------------------------------------------------------------
-        0x010E RouteCnt: Routing counter constant (layer 3), structure:
-                         0ccc0000, ccc = routing counter constant (0 to 7)
-        0x010F MxRstCnt: Contains the INAK and BUSY retries (layer 2), structure:
-                         bbb00iii, bbb=BUSY retries
-                         iii=INAK retries
-        0x0110 ConfigDes: Configuration descriptor (see further down)
-        0x0111 AssocTabPtr: Pointer to the Association Table (layer 7)
-        0x0112 CommsTabPtr: Pointer to the Table of group objects
-        0x0113 UsrInitPtr: Pointer to the initialization routine of the application program
-        0x0114 UsrPrgPtr: Pointer to the application program
-        0x0115 UsrSavPtr: Pointer to the SAVE subroutine of the application program
-        0x0116 AdrTab: Address table (layers 2 and 4)
-                       m = No. of group addresses (1 + (1 + m) * 2 Bytes)
-        ...0x01FE       Application program UsrPrg,
-                        Initialisation program UsrInit,
-                        SAVE subroutine UsrSav
-        0x01FF EE_EXOR: EEPROM checksum for the range to be checked (cp. CheckLim)
-        """
-        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
-        cemi += struct.pack('!B', 3) # Data length
-        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
-        npdu |= sequence << 10
-        npdu |= CEMI_APCI_TYPES['A_Memory_Read'] << 4
-        npdu |= read_count << 0 # number of octets to read/write
-        cemi += struct.pack('!H', npdu)
-        cemi += struct.pack('!H', memory_address)  # memory address
-        self._pack_knx_body(cemi)
-        self.pack_knx_message()
-
-    def apci_group_value_write(self, value=0):
-        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'), address_type=True)
-        cemi += struct.pack('!B', 1)  # Data length
-        npdu = CEMI_TPCI_TYPES.get('UDP') << 14
-        npdu |= CEMI_APCI_TYPES['A_GroupValue_Write'] << 6
-        npdu |= value  << 0
-        cemi += struct.pack('!H', npdu)
-        self._pack_knx_body(cemi)
-        self.pack_knx_message()
 
 
 class KnxTunnellingAck(KnxMessage):
