@@ -113,8 +113,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                 if not self.tunnel_established:
                     self.tunnel_established = True
                 self.communication_channel = knx_msg.body.get('communication_channel_id')
-                #self.knx_source_address = knx_message.body.get('data_block').get('knx_address')
-                self.knx_source_address = '0.0.0' # TODO: always use 0.0.0?
+                self.knx_source_address = knx_msg.body.get('data_block').get('knx_address')
                 self.future.set_result(True)
             else:
                 LOGGER.error(knx_msg.ERROR)
