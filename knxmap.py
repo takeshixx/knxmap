@@ -82,6 +82,16 @@ ARGS.add_argument(
     '--auth-key', action='store', dest='auth_key', type=int,
     default=0xffffffff, help='Authorize key for System 2 and System 7 devices')
 
+ARGS.add_argument(
+    '--group-write', action='store', dest='group_write_value',
+    default=False, help='Value to write to the group address')
+ARGS.add_argument(
+    '--group-address', action='store', dest='group_write_address',
+    default=False, help='A KNX group address')
+ARGS.add_argument(
+    '--routing', action='store_true', dest='routing',
+    default=False, help='Use Routing instead of Tunnelling')
+
 
 def main():
     args = ARGS.parse_args()
@@ -110,18 +120,27 @@ def main():
     scanner = KnxScanner(targets=targets.targets, max_workers=args.workers)
 
     try:
-        loop.run_until_complete(scanner.scan(
-            search_mode=args.search_mode,
-            search_timeout=args.search_timeout,
-            desc_timeout=args.desc_timeout,
-            desc_retries=args.desc_retries,
-            bus_targets=bus_targets.targets,
-            bus_info=args.bus_info,
-            bus_monitor_mode=args.bus_monitor_mode,
-            group_monitor_mode=args.group_monitor_mode,
-            iface=args.iface,
-            bruteforce_key=args.bruteforce_key,
-            auth_key=args.auth_key))
+        if args.group_write_value and args.group_write_address:
+            loop.run_until_complete(scanner.group_writer(
+                target=args.group_write_address,
+                value=args.group_write_value,
+                desc_timeout=args.desc_timeout,
+                desc_retries=args.desc_retries,
+                iface=args.iface,
+                routing=args.routing))
+        else:
+            loop.run_until_complete(scanner.scan(
+                search_mode=args.search_mode,
+                search_timeout=args.search_timeout,
+                desc_timeout=args.desc_timeout,
+                desc_retries=args.desc_retries,
+                bus_targets=bus_targets.targets,
+                bus_info=args.bus_info,
+                bus_monitor_mode=args.bus_monitor_mode,
+                group_monitor_mode=args.group_monitor_mode,
+                iface=args.iface,
+                bruteforce_key=args.bruteforce_key,
+                auth_key=args.auth_key))
     except KeyboardInterrupt:
         for t in asyncio.Task.all_tasks():
             t.cancel()

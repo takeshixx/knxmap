@@ -435,3 +435,73 @@ class KnxScanner:
 
             for t in self.knx_gateways:
                 print_knx_target(t)
+
+    @asyncio.coroutine
+    def group_writer(self, target, value=0, routing=False, desc_timeout=2,
+                     desc_retries=2, iface=False):
+        self.desc_timeout = desc_timeout
+        self.desc_retries = desc_retries
+        self.iface = iface
+        workers = [asyncio.Task(self.knx_description_worker(), loop=self.loop)
+                   for _ in range(self.max_workers if len(self.targets) > self.max_workers else len(self.targets))]
+        self.t0 = time.time()
+        yield from self.q.join()
+        self.t1 = time.time()
+        for w in workers:
+            w.cancel()
+
+        if self.knx_gateways:
+            # TODO: make sure only a single gateway is supplied
+            knx_gateway = self.knx_gateways[0]
+        else:
+            LOGGER.error('No valid KNX gateway found')
+            return
+
+        if routing:
+            # Use KNX Routing to write group values
+            if not 'KNXnet/IP Routing' in knx_gateway.supported_services:
+                LOGGER.error('KNX gateway {gateway} does not support Routing'.format(
+                    gateway=knx_gateway.host))
+
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.setblocking(0)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, struct.pack('256s', str.encode(self.iface)))
+
+            # TODO: what if we have devices that access more advanced payloads?
+            if isinstance(value, str):
+                value = int(value)
+            protocol = KnxRoutingConnection(target=target, value=value)
+            waiter = asyncio.Future(loop=self.loop)
+            transport = self.loop._make_datagram_transport(
+                sock, protocol, ('224.0.23.12', 3671), waiter)
+
+            try:
+                # Wait until connection_made() has been called on the transport
+                yield from waiter
+            except:
+                LOGGER.error('Creating multicast transport failed!')
+                transport.close()
+                return
+
+        else:
+            # Use KNX Tunnelling to write group values
+            if not 'KNXnet/IP Tunnelling' in knx_gateway.supported_services:
+                LOGGER.error('KNX gateway {gateway} does not support Routing'.format(
+                    gateway=knx_gateway.host))
+
+            future = asyncio.Future()
+            transport, protocol = yield from self.loop.create_datagram_endpoint(
+                functools.partial(KnxTunnelConnection, future),
+                remote_addr=(knx_gateway.host, knx_gateway.port))
+            self.bus_protocols.append(protocol)
+
+            # Make sure the tunnel has been established
+            connected = yield from future
+
+            if connected:
+                # TODO: what if we have devices that access more advanced payloads?
+                if isinstance(value, str):
+                    value = int(value)
+                yield from protocol.apci_group_value_write(target, value=value)
+                protocol.knx_tunnel_disconnect()
