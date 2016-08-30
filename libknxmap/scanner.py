@@ -22,6 +22,7 @@ from libknxmap.gateway import *
 from libknxmap.manufacturers import *
 from libknxmap.targets import *
 from libknxmap.bus.tunnel import KnxTunnelConnection
+from libknxmap.bus.router import KnxRoutingConnection
 from libknxmap.bus.monitor import KnxBusMonitor
 
 __all__ = ['KnxScanner']
@@ -149,7 +150,6 @@ class KnxScanner:
                             property_id=DEVICE_OBJECTS.get('PID_SERIAL_NUMBER'))
                         if isinstance(serial, (str, bytes)):
                             serial = codecs.encode(serial, 'hex').decode().upper()
-
 
                         # DEV - group value write
                         r = yield from protocol.apci_group_value_write('0.0.4', value=1)
@@ -289,7 +289,7 @@ class KnxScanner:
 
     @asyncio.coroutine
     def knx_search_worker(self):
-        """Send a KnxDescription request to see if target is a KNX device."""
+        """Send a KnxSearch request to see if target is a KNX device."""
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.setblocking(0)
@@ -419,7 +419,6 @@ class KnxScanner:
             self.desc_retries = desc_retries
             workers = [asyncio.Task(self.knx_description_worker(), loop=self.loop)
                        for _ in range(self.max_workers if len(self.targets) > self.max_workers else len(self.targets))]
-
             self.t0 = time.time()
             yield from self.q.join()
             self.t1 = time.time()

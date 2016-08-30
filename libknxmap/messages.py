@@ -22,7 +22,10 @@ __all__ = ['parse_message',
            'KnxDisconnectRequest',
            'KnxDisconnectResponse',
            'KnxDeviceConfigurationRequest',
-           'KnxDeviceConfigurationAck']
+           'KnxDeviceConfigurationAck',
+           'KnxRoutingIndication',
+           'KnxRoutingLostMessage',
+           'KnxRoutingBusy']
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1259,15 +1262,19 @@ class KnxDeviceConfigurationAck(KnxMessage):
 
 class KnxRoutingIndication(KnxMessage):
 
-    def __init__(self, message=None):
+    def __init__(self, message=None, knx_source='0.0.0', knx_destination=None):
         super(KnxRoutingIndication, self).__init__()
         if message:
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = KNX_MESSAGE_TYPES.get('ROUTING_INDICATION')
-            self.pack_knx_message()
+            if knx_source:
+                self.set_knx_source(knx_source)
+            if knx_destination:
+                self.set_knx_destination(knx_destination)
 
     def _pack_knx_body(self, cemi=None):
+        self.body = b''
         if cemi:
             self.body += cemi
         else:
@@ -1289,7 +1296,7 @@ class KnxRoutingLostMessage(KnxMessage):
         if message:
             self.unpack_knx_message(message)
         else:
-            self.header['service_type'] = KNX_MESSAGE_TYPES.get('ROUTING_LOST_MESSAGE')
+            self.header['service_tye'] = KNX_MESSAGE_TYPES.get('ROUTING_LOST_MESSAGE')
             self.pack_knx_message()
 
     def _pack_knx_body(self):

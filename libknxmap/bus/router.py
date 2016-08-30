@@ -10,24 +10,19 @@ LOGGER = logging.getLogger(__name__)
 class KnxRoutingConnection(asyncio.DatagramProtocol):
     # TODO: implement routing
     """Routing is used to send KNX messages to multiple devices without any
-    connection setup (in contrast to tunnelling).
-
-        * uses UDP multicast (224.0.23.12) packets to port 3671
-
-        * no confirmation of successful transmission
-
-        * will send message to group address if supplied group address is known
-        by devices?"""
-    def __init__(self, future, loop=None):
-        self.future = future
+    connection setup (in contrast to tunnelling)."""
+    def __init__(self, target, value, loop=None):
         self.loop = loop or asyncio.get_event_loop()
         self.transport = None
+        self.target = target
+        self.value = value
 
     def connection_made(self, transport):
         self.transport = transport
-
-    def datagram_received(self, data, addr):
-        pass
-
-    def _send(self, message):
-        self.transport.get_extra_info('socket').sendto(message.get_message(), ('224.0.23.12', 3671))
+        self.peername = self.transport.get_extra_info('peername')
+        self.sockname = self.transport.get_extra_info('sockname')
+        packet = KnxRoutingIndication(knx_destination=self.target)
+        packet.apci_group_value_write(value=self.value)
+        self.transport.get_extra_info('socket').sendto(packet.get_message(),
+               (KNX_CONSTANTS.get('MULTICAST_ADDR'),
+                KNX_CONSTANTS.get('DEFAULT_PORT')))
