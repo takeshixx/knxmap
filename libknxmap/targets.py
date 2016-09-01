@@ -32,6 +32,8 @@ class Targets:
 
         if isinstance(targets, (set, list)):
             self._parse(targets)
+        elif isinstance(targets, str):
+            self._parse([targets])
 
     def _parse(self, targets):
         """Parse all targets with ipaddress module (with CIDR notation support)."""
