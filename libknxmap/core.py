@@ -32,7 +32,7 @@ LOGGER = logging.getLogger(__name__)
 
 class KnxMap:
     """The main scanner instance that takes care of scheduling workers for the targets."""
-    def __init__(self, targets=None, max_workers=100, loop=None, ):
+    def __init__(self, targets=None, max_workers=100, loop=None):
         self.loop = loop or asyncio.get_event_loop()
         # The number of concurrent workers for discovering KNXnet/IP gateways
         self.max_workers = max_workers
@@ -382,58 +382,68 @@ class KnxMap:
             pass
 
     @asyncio.coroutine
-    def scan(self, targets=None, search_mode=False, search_timeout=5, iface=None,
-             desc_timeout=2, desc_retries=2, bus_targets=None, bus_info=False,
-             bus_monitor_mode=False, group_monitor_mode=False, bruteforce_key=False,
-             auth_key=0xffffffff):
+    def monitor(self, targets=None, group_monitor_mode=False):
+        if targets:
+            self.set_targets(targets)
+        if group_monitor_mode:
+            LOGGER.info('Starting group monitor')
+        else:
+            LOGGER.info('Starting bus monitor')
+        future = asyncio.Future()
+        transport, protocol = yield from self.loop.create_datagram_endpoint(
+            functools.partial(KnxBusMonitor, future, group_monitor=group_monitor_mode),
+            remote_addr=list(self.targets)[0])
+        self.bus_protocols.append(protocol)
+        yield from future
+        if group_monitor_mode:
+            LOGGER.info('Starting group monitor')
+        else:
+            LOGGER.info('Starting bus monitor')
+
+    @asyncio.coroutine
+    def search(self, search_timeout=5, iface=None):
+        self.iface = iface
+        self.search_timeout = search_timeout
+        LOGGER.info('Make sure there are no filtering rules that drop UDP multicast packets!')
+        yield from self.search_gateways()
+        for t in self.knx_gateways:
+            print_knx_target(t)
+        LOGGER.info('Searching done')
+
+    @asyncio.coroutine
+    def brute(self, targets=None, bus_target=None):
+        if targets:
+            self.set_targets(targets)
+        tasks = [asyncio.Task(self.bruteforce_auth_key(t, bus_target), loop=self.loop) for t in self.targets]
+        yield from asyncio.wait(tasks)
+
+    @asyncio.coroutine
+    def scan(self, targets=None, desc_timeout=2, desc_retries=2,
+             bus_targets=None, bus_info=False, auth_key=0xffffffff):
         """The function that will be called by run_until_complete(). This is the main coroutine."""
         self.auth_key = auth_key
         if targets:
             self.set_targets(targets)
 
-        if search_mode:
-            self.iface = iface
-            self.search_timeout = search_timeout
-            LOGGER.info('Make sure there are no filtering rules that drop UDP multicast packets!')
-            yield from self.search_gateways()
-            for t in self.knx_gateways:
-                print_knx_target(t)
-            LOGGER.info('Searching done')
+        self.desc_timeout = desc_timeout
+        self.desc_retries = desc_retries
+        workers = [asyncio.Task(self.knx_description_worker(), loop=self.loop)
+                   for _ in range(self.max_workers if len(self.targets) > self.max_workers else len(self.targets))]
+        self.t0 = time.time()
+        yield from self.q.join()
+        self.t1 = time.time()
+        for w in workers:
+            w.cancel()
 
-        elif bus_monitor_mode or group_monitor_mode:
-            LOGGER.info('Starting bus monitor')
-            future = asyncio.Future()
-            transport, protocol = yield from self.loop.create_datagram_endpoint(
-                functools.partial(KnxBusMonitor, future, group_monitor=group_monitor_mode),
-                remote_addr=list(self.targets)[0])
-            self.bus_protocols.append(protocol)
-            yield from future
-            LOGGER.info('Stopping bus monitor')
-
-        elif bruteforce_key:
-            tasks = [asyncio.Task(self.bruteforce_auth_key(t, bus_targets), loop=self.loop) for t in self.targets]
-            yield from asyncio.wait(tasks)
-
+        if bus_targets and self.knx_gateways:
+            self.bus_info = bus_info
+            bus_scanners = [asyncio.Task(self.bus_scan(g, bus_targets), loop=self.loop) for g in self.knx_gateways]
+            yield from asyncio.wait(bus_scanners)
         else:
-            self.desc_timeout = desc_timeout
-            self.desc_retries = desc_retries
-            workers = [asyncio.Task(self.knx_description_worker(), loop=self.loop)
-                       for _ in range(self.max_workers if len(self.targets) > self.max_workers else len(self.targets))]
-            self.t0 = time.time()
-            yield from self.q.join()
-            self.t1 = time.time()
-            for w in workers:
-                w.cancel()
+            LOGGER.info('Scan took {} seconds'.format(self.t1 - self.t0))
 
-            if bus_targets and self.knx_gateways:
-                self.bus_info = bus_info
-                bus_scanners = [asyncio.Task(self.bus_scan(g, bus_targets), loop=self.loop) for g in self.knx_gateways]
-                yield from asyncio.wait(bus_scanners)
-            else:
-                LOGGER.info('Scan took {} seconds'.format(self.t1 - self.t0))
-
-            for t in self.knx_gateways:
-                print_knx_target(t)
+        for t in self.knx_gateways:
+            print_knx_target(t)
 
     @asyncio.coroutine
     def group_writer(self, target, value=0, routing=False, desc_timeout=2,
