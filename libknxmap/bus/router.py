@@ -2,7 +2,7 @@ import logging
 import asyncio
 
 from libknxmap.messages import *
-from libknxmap.core import *
+from libknxmap.constants import *
 
 LOGGER = logging.getLogger(__name__)
 

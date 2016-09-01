@@ -5,7 +5,7 @@ import logging
 import socket
 import struct
 
-from libknxmap.core import *
+from libknxmap.constants import *
 
 __all__ = ['parse_message',
            'KnxMessage',
@@ -860,7 +860,7 @@ class KnxDescriptionResponse(KnxMessage):
 
 
 class KnxConnectRequest(KnxMessage):
-    # TODO: move constants to core.py
+    # TODO: move constants to constants.py
     layer_types = {
         0x02: 'TUNNEL_LINKLAYER',
         0x03: 'DEVICE_MGMT_CONNECTION',

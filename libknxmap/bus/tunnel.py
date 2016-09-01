@@ -2,7 +2,7 @@ import logging
 import asyncio
 
 from libknxmap.messages import *
-from libknxmap.core import *
+from libknxmap.constants import *
 
 LOGGER = logging.getLogger(__name__)
 
@@ -152,7 +152,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             cemi_tpci_type = knx_msg.body.get('cemi').get('tpci').get('type')
             cemi_apci_type = knx_msg.body.get('cemi').get('apci')
 
-            LOGGER.info(('[KnxTunnellingRequest] SRC: {knx_src}, DST: {knx_dst}, CODE: {msg_code}, '
+            LOGGER.debug(('[KnxTunnellingRequest] SRC: {knx_src}, DST: {knx_dst}, CODE: {msg_code}, '
                          'SEQ: {seq}. TPCI: {tpci}, APCI: {apci}').format(
                                 knx_src=knx_src,
                                 knx_dst=knx_dst,

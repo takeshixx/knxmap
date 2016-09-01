@@ -5,7 +5,7 @@ import ipaddress
 import collections
 import binascii
 
-from libknxmap.core import *
+from libknxmap.constants import *
 from libknxmap.messages import *
 
 __all__ = ['Targets',
