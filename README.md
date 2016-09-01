@@ -45,13 +45,13 @@ KNXmap supports three different scanning modes:
 This is the default mode of KNXmap. It sends KNX description request to the supplied targets in order to chceck if they are KNXnet/IP gateways.
 
 ```
-knxmap.py 192.168.1.100
+knxmap.py scan 192.168.1.100
 ```
 
 KNXmap supports to scan multiple targets at once by supplying multiple IP addresses separated by a space. Targets can also be defined as networks in CIDR notation:
 
 ```
-knxmap.py 192.168.1.100 192.168.1.110 192.168.2.0/24
+knxmap.py scan 192.168.1.100 192.168.1.110 192.168.2.0/24
 ```
 
 ### Bus Mode
@@ -59,13 +59,13 @@ knxmap.py 192.168.1.100 192.168.1.110 192.168.2.0/24
 In addition to the discovery mode, KNXmap also supports to scan for devices on the KNX bus.
 
 ```
-knxmap.py --bus-targets 1.1.5 192.168.1.100
+knxmap.py scan 192.168.1.100 --bus-targets 1.1.5
 ```
 
 KNXmap also supports bus address ranges:
 
 ```
-knxmap.py --bus-targets 1.0.0-1.1.255 192.168.1.100
+knxmap.py scan 192.168.1.100 --bus-targets 1.0.0-1.1.255
 ```
 
 The default mode is to only check if sending messages to a address returns an error or not. This helps to identify potential devices and alive targets.
@@ -75,7 +75,7 @@ The default mode is to only check if sending messages to a address returns an er
 In addition to the default bus scanning KNXmap can also extract basic information from devices for further identification by supplying the `--bus-info` argument:
 
 ```
-knxmap.py --bus-targets 1.1.5 --bus-info 192.168.1.100
+knxmap.py scan 192.168.1.100 --bus-targets 1.1.5 --bus-info
 ```
 
 ### Search Mode
@@ -83,7 +83,7 @@ knxmap.py --bus-targets 1.1.5 --bus-info 192.168.1.100
 KNX supports finding devices by sending multicast packets that should be answered by any KNXnet/IP gateway. KNXmap supports gateway searching via the `--search` flag. It requires the `-i`/`--interface` and superuser privileges:
 
 ```
-sudo knxmap.py --search --interface eth1
+sudo knxmap.py --interface eth1 search 
 ```
 
 **Note**: Packet filtering rules might block the response packets. If there are no KNXnet/IP gateways answering their packets might be dropped by netfilter/iptables rules.
@@ -92,10 +92,27 @@ sudo knxmap.py --search --interface eth1
 
 KNXmap supports two different monitoring modes:
 
-* Bus monitoring (`--bus-monitor`) prints the raw messages received from the KNX bus.
-* Group monitoring (`--group-monitor`) prints all group messages received from the KNX bus.
+* Bus monitoring: prints the raw messages received from the KNX bus.
+
+```
+knxmap.py monitor 192.168.1.100
+```
+
+* Group monitoring: prints all group messages received from the KNX bus.
+
+```
+knxmap.py monitor 192.168.1.100 --group-monitor
+```
 
 These monitoring modes can be useful for debugging communication on the bus. Additionally, they can be used for passive information gathering which allows to identify bus devices without sending messages to any individual or group address. Especially motion sensors or other devices that frequently send messages to the bus can easily be identified via bus monitoring.
+
+## Group Write
+
+KNXmap allows one to write arbitrary values to any group address on the bus. The following example writes the value `1` to the group address `0/0/1`:
+
+```
+knxmap.py write 192.168.1.100 0/0/1 1
+```
 
 ## Hacking
 
