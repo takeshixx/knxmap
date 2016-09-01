@@ -21,8 +21,7 @@ __all__ = ['KNX_CONSTANTS',
            'OBJECT_TYPES',
            'DEVICE_OBJECTS',
            'PARAMETER_OBJECTS',
-           'OBJECTS',
-           'Error']
+           'OBJECTS']
 
 
 KNX_CONSTANTS = {
@@ -595,7 +594,3 @@ OBJECTS = {
 for k, v in OBJECTS.items():
     OBJECTS[k] = collections.OrderedDict(
         sorted(v.items(), key=lambda v: v[1]))
-
-
-class Error(Exception):
-    pass
