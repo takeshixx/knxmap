@@ -21,8 +21,10 @@ except ImportError:
     sys.exit(1)
 
 LOGGER = logging.getLogger(__name__)
-ARGS = argparse.ArgumentParser(description="KNXnet/IP network and bus mapper")
-SUBARGS = ARGS.add_subparsers(help='Commands', dest='cmd')
+ARGS = argparse.ArgumentParser(
+    description='KNXnet/IP network and bus mapper',
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+SUBARGS = ARGS.add_subparsers(dest='cmd', metavar='')
 
 # General options
 ARGS.add_argument(
