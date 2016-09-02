@@ -1,14 +1,15 @@
 import asyncio
 import binascii
-import collections
 import codecs
+import collections
+import functools
 import logging
 import os
 import socket
 import struct
 import sys
 import time
-import functools
+
 try:
     # Python 3.4
     from asyncio import JoinableQueue as Queue
@@ -16,7 +17,7 @@ except ImportError:
     # Python 3.5 renamed it to Queue
     from asyncio import Queue
 
-from libknxmap.constants import *
+from libknxmap.data.constants import *
 from libknxmap.messages import *
 from libknxmap.gateway import *
 from libknxmap.manufacturers import *

@@ -1,11 +1,11 @@
 """This module contains various helper classes that make handling targets and sets
 of targets and results easiert."""
-import logging
-import ipaddress
-import collections
 import binascii
+import collections
+import ipaddress
+import logging
 
-from libknxmap.constants import *
+from libknxmap.data.constants import *
 from libknxmap.messages import *
 
 __all__ = ['Targets',
