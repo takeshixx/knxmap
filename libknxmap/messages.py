@@ -513,8 +513,8 @@ class KnxMessage(object):
         cemi['tpci']['type'] = tpci_unpacked['tpci_type']
         cemi['tpci']['sequence'] = tpci_unpacked['sequence']
 
-        if tpci_unpacked['tpci_type'] is 2 or \
-                tpci_unpacked['tpci_type'] is 3:
+        if tpci_unpacked['tpci_type'] is [2, 3]:
+            # Control data includes a status field
             tpci_unpacked['status'] = 0
             tpci_unpacked['status'] |= ((tpci[0] >> 0) & 1) << 0
             tpci_unpacked['status'] |= ((tpci[0] >> 1) & 1) << 1
@@ -553,8 +553,9 @@ class KnxMessage(object):
                     tpci_unpacked['apci'] |= ((tpci[1] >> 2) & 1) << 2
                     tpci_unpacked['apci'] |= ((tpci[1] >> 3) & 1) << 3
 
-            cemi['apci'] = tpci_unpacked['apci']
-            cemi['apci_data'] = tpci_unpacked.get('apci_data')
+            cemi['apci'] = dict()
+            cemi['apci']['type'] = tpci_unpacked['apci']
+            cemi['apci']['data'] = tpci_unpacked.get('apci_data')
             cemi['data'] = tpci[2:]
 
         # TODO: if there is more data, read it now
