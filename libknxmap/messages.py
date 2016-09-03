@@ -263,7 +263,7 @@ class KnxMessage(object):
             self.body['hpai']['protocol_code'], \
             self.body['hpai']['ip_address'], \
             self.body['hpai']['port'] = struct.unpack('!BBHH', message[:8])
-            self.body['hpai']['ip_address'] = socket.inet_aton(self.body['hpai']['ip_address']) # most likely not works
+            self.body['hpai']['ip_address'] = socket.inet_aton(self.body['hpai']['ip_address'])
             return message[8:]
         except struct.error as e:
             LOGGER.exception(e)
@@ -288,7 +288,6 @@ class KnxMessage(object):
         dib_dev_info['structure_length'] = self._unpack_stream('!B', message)
         dib_dev_info['description_type'] = self._unpack_stream('!B', message)
         dib_dev_info['knx_medium'] = self._unpack_stream('!B', message)
-        #dib_dev_info['device_status'] = 'PROGMODE_ON' if self._unpack_stream('!B', message) else 'PROGMODE_OFF'
         dib_dev_info['device_status'] = self.unpack_cemi_runstate(self._unpack_stream('!B', message))
         dib_dev_info['knx_address'] = self.parse_knx_address(self._unpack_stream('!H', message))
         dib_dev_info['project_install_identifier'] = self._unpack_stream('!H', message)
@@ -304,13 +303,11 @@ class KnxMessage(object):
         dib_supp_sv_families['structure_length'] = self._unpack_stream('!B', message)
         dib_supp_sv_families['description_type'] = self._unpack_stream('!B', message)
         dib_supp_sv_families['families'] = {}
-
         for i in range(int((dib_supp_sv_families['structure_length'] - 2) / 2)):
             service_id = self._unpack_stream('!B', message)
             version = self._unpack_stream('!B', message)
             dib_supp_sv_families['families'][service_id] = dict()
             dib_supp_sv_families['families'][service_id]['version'] = version
-
         return dib_supp_sv_families
 
     @staticmethod
@@ -452,7 +449,6 @@ class KnxMessage(object):
     @staticmethod
     def unpack_cemi_runstate(data):
         """Parse runstate field to a drict."""
-        #state = dict()
         state = collections.OrderedDict()
         state['PROG_MODE'] = (data >> 0) & 1
         state['LINK_LAYER'] = (data >> 1) & 1
@@ -621,15 +617,7 @@ class KnxMessage(object):
 
     def apci_property_value_read(self, sequence=0, object_index=0, property_id=0x0f,
                                  num_elements=1, start_index=1):
-        """A_PropertyValue_Read
-
-        object index: 0x00, property id: 0x0f -> order number
-        object index: 0x00, property id: 0x0b -> serial number
-        object index: 0x03, property id: 0x0d -> application programm, ABB A021 v2.0, 0002a02120
-        object index: 0x03, property id: 0x06 -> 0x01
-        object index: 0x04, property id: 0x0d -> -
-        object index: 0x04, property id: 0x06 -> -
-        """
+        """A_PropertyValue_Read"""
         cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 5) # Data length
         npdu = CEMI_TPCI_TYPES.get('NDP') << 14
@@ -861,23 +849,6 @@ class KnxDescriptionResponse(KnxMessage):
 
 
 class KnxConnectRequest(KnxMessage):
-    # TODO: move constants to constants.py
-    layer_types = {
-        0x02: 'TUNNEL_LINKLAYER',
-        0x03: 'DEVICE_MGMT_CONNECTION',
-        0x04: 'TUNNEL_RAW',
-        0x06: 'REMLOG_CONNECTION',
-        0x07: 'REMCONF_CONNECTION',
-        0x08: 'OBJSVR_CONNECTION',
-        0x80: 'TUNNEL_BUSMONITOR'}
-    _layer_types = {
-        'TUNNEL_LINKLAYER': 0x02,
-        'DEVICE_MGMT_CONNECTION': 0x03,
-        'TUNNEL_RAW': 0x04,
-        'REMLOG_CONNECTION': 0x06,
-        'REMCONF_CONNECTION': 0x07,
-        'OBJSVR_CONNECTION': 0x08,
-        'TUNNEL_BUSMONITOR': 0x80}
 
     def __init__(self, message=None, sockname=None, layer_type='TUNNEL_LINKLAYER',
                  connection_type=0x04):
@@ -887,7 +858,7 @@ class KnxConnectRequest(KnxMessage):
         else:
             self.header['service_type'] = KNX_MESSAGE_TYPES.get('CONNECT_REQUEST')
             self.connection_type = connection_type
-            self.layer_type = self._layer_types.get(layer_type)
+            self.layer_type = _LAYER_TYPES.get(layer_type)
             try:
                 self.source, self.port = sockname
                 self.pack_knx_message()
@@ -905,7 +876,8 @@ class KnxConnectRequest(KnxMessage):
             self.body += struct.pack('!B', 4)  # structure_length
         else:
             self.body += struct.pack('!B', 2)  # structure_length
-        self.body += struct.pack('!B', self.connection_type)  # connection type # TODO: implement other connections (routing, object server)
+        # TODO: implement other connections (routing, object server)
+        self.body += struct.pack('!B', self.connection_type)  # connection type
         if self.connection_type == 0x04:
             self.body += struct.pack('!B', self.layer_type)  # knx layer type
             self.body += struct.pack('!B', 0x00)  # reserved
@@ -970,7 +942,7 @@ class KnxTunnellingRequest(KnxMessage):
 
     def __init__(self, message=None, sockname=None, communication_channel=None,
                  knx_source=None, knx_destination=None, sequence_count=0, message_code=0x11,
-                 cemi_ndpu_len=1):
+                 cemi_ndpu_len=0):
         super(KnxTunnellingRequest, self).__init__()
         if message:
             self.unpack_knx_message(message)
@@ -979,7 +951,7 @@ class KnxTunnellingRequest(KnxMessage):
             self.communication_channel = communication_channel
             self.sequence_count = sequence_count
             self.cemi_message_code = message_code
-            self.cemi_npdu_len = 0
+            self.cemi_npdu_len = cemi_ndpu_len
             if knx_source:
                 self.set_knx_source(knx_source)
             if knx_destination:
@@ -1049,8 +1021,7 @@ class KnxTunnellingAck(KnxMessage):
 
 class KnxConnectionStateRequest(KnxMessage):
 
-    def __init__(self, message=None, sockname=None, communication_channel=None,
-                 knx_source=None, knx_destination=None):
+    def __init__(self, message=None, sockname=None, communication_channel=None):
         super(KnxConnectionStateRequest, self).__init__()
         if message:
             self.unpack_knx_message(message)
@@ -1084,8 +1055,7 @@ class KnxConnectionStateRequest(KnxMessage):
 
 class KnxConnectionStateResponse(KnxMessage):
 
-    def __init__(self, message=None, communication_channel=None,
-                 knx_source=None, knx_destination=None):
+    def __init__(self, message=None, communication_channel=None):
         super(KnxConnectionStateResponse, self).__init__()
         if message:
             self.unpack_knx_message(message)
@@ -1111,8 +1081,7 @@ class KnxConnectionStateResponse(KnxMessage):
 
 class KnxDisconnectRequest(KnxMessage):
 
-    def __init__(self, message=None, sockname=None, communication_channel=None,
-                 knx_source=None, knx_destination=None):
+    def __init__(self, message=None, sockname=None, communication_channel=None):
         super(KnxDisconnectRequest, self).__init__()
         if message:
             self.unpack_knx_message(message)
@@ -1172,6 +1141,7 @@ class KnxDisconnectResponse(KnxMessage):
 
 
 class KnxDeviceConfigurationRequest(KnxMessage):
+    # TODO: properly implement configuration requests
 
     def __init__(self, message=None, sockname=None, communication_channel=None,
                  sequence_count=0, message_code=0xfc, cemi_ndpu_len=1):
