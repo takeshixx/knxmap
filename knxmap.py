@@ -8,8 +8,8 @@ from libknxmap import KnxMap, Targets, KnxTargets
 
 # asyncio requires at least Python 3.3
 if sys.version_info.major < 3 or \
-    (sys.version_info.major > 2 and
-    sys.version_info.minor < 3):
+        (sys.version_info.major > 2 and
+                 sys.version_info.minor < 3):
     print('At least Python version 3.3 is required to run this script!')
     sys.exit(1)
 try:
@@ -91,14 +91,13 @@ pmonitor.add_argument(
 pmonitor.add_argument(
     '--group-monitor', action='store_true', dest='group_monitor_mode',
     default=False, help='Monitor group instead of messages via KNXnet/IP gateway')
-# TODO: add dump-file argument for monitoring modes
 
 
 def main():
     args = ARGS.parse_args()
     levels = [logging.ERROR, logging.WARN, logging.INFO, logging.DEBUG]
     format = '[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s' if args.level > 2 else '%(message)s'
-    logging.basicConfig(level=levels[min(args.level, len(levels)-1)], format=format)
+    logging.basicConfig(level=levels[min(args.level, len(levels) - 1)], format=format)
     loop = asyncio.get_event_loop()
 
     if hasattr(args, 'targets'):

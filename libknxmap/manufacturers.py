@@ -1,5 +1,6 @@
 import json
 
+
 def get_manufacturer_by_id(id):
     assert isinstance(id, int)
     m = json.load(open('libknxmap/data/manufacturers.json'))

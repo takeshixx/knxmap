@@ -33,6 +33,7 @@ LOGGER = logging.getLogger(__name__)
 
 class KnxMap:
     """The main scanner instance that takes care of scheduling workers for the targets."""
+
     def __init__(self, targets=None, max_workers=100, loop=None):
         self.loop = loop or asyncio.get_event_loop()
         # The number of concurrent workers for discovering KNXnet/IP gateways
@@ -143,7 +144,8 @@ class KnxMap:
                             target,
                             memory_address=0x0060)
                         if device_state:
-                            properties['DEVICE_STATE'] = KnxMessage.unpack_cemi_runstate(int.from_bytes(device_state, 'big'))
+                            properties['DEVICE_STATE'] = KnxMessage.unpack_cemi_runstate(
+                                int.from_bytes(device_state, 'big'))
 
                         # Read the serial number object on System 2 and System 7 devices
                         serial = yield from protocol.apci_property_value_read(
@@ -197,35 +199,35 @@ class KnxMap:
 
                         ret = yield from protocol.apci_memory_read(
                             target,
-                            memory_address = 0x0105,
+                            memory_address=0x0105,
                             read_count=2)
                         if ret:
                             properties['DevTyp'] = codecs.encode(ret, 'hex')
 
                         ret = yield from protocol.apci_memory_read(
                             target,
-                            memory_address = 0x0101,
+                            memory_address=0x0101,
                             read_count=3)
                         if ret:
                             properties['ManData'] = codecs.encode(ret, 'hex')
 
                         ret = yield from protocol.apci_memory_read(
                             target,
-                            memory_address = 0x0108,
+                            memory_address=0x0108,
                             read_count=1)
                         if ret:
                             properties['CheckLim'] = codecs.encode(ret, 'hex')
 
                         ret = yield from protocol.apci_memory_read(
                             target,
-                            memory_address = 0x01FE,
+                            memory_address=0x01FE,
                             read_count=1)
                         if ret:
                             properties['UsrPrg'] = codecs.encode(ret, 'hex')
 
                         ret = yield from protocol.apci_memory_read(
                             target,
-                            memory_address = 0x0116,
+                            memory_address=0x0116,
                             read_count=4)
                         if ret:
                             properties['AdrTab'] = codecs.encode(ret, 'hex')
@@ -235,7 +237,7 @@ class KnxMap:
                         for i in range(51):
                             ret = yield from protocol.apci_memory_read(
                                 target,
-                                memory_address = start_addr,
+                                memory_address=start_addr,
                                 read_count=5)
                             if ret:
                                 properties['EEPROM_DUMP'] += codecs.encode(ret, 'hex')
@@ -373,7 +375,7 @@ class KnxMap:
                         knx_medium=response.body.get('dib_dev_info').get('knx_medium'),
                         project_install_identifier=response.body.get('dib_dev_info').get('project_install_identifier'),
                         supported_services=[
-                            KNX_SERVICES[k] for k,v in
+                            KNX_SERVICES[k] for k, v in
                             response.body.get('dib_supp_sv_families').get('families').items()],
                         bus_devices=[])
 

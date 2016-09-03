@@ -8,6 +8,8 @@ __all__ = ['KNX_CONSTANTS',
            'KNX_MEDIUMS',
            'KNX_BUS_MEDIUMS',
            'DEVICE_TYPES',
+           'LAYER_TYPES',
+           '_LAYER_TYPES',
            'KNX_MESSAGE_TYPES',
            '_KNX_MESSAGE_TYPES',
            'KNX_STATUS_CODES',
@@ -23,13 +25,11 @@ __all__ = ['KNX_CONSTANTS',
            'PARAMETER_OBJECTS',
            'OBJECTS']
 
-
 KNX_CONSTANTS = {
     'KNXNETIP_VERSION_10': 0x10,
     'HEADER_SIZE_10': 0x06,
     'DEFAULT_PORT': 3671,
     'MULTICAST_ADDR': '224.0.23.12'}
-
 
 KNX_SERVICES = {
     0x02: 'KNXnet/IP Core',
@@ -40,7 +40,6 @@ KNX_SERVICES = {
     0x07: 'KNXnet/IP Remote Configuration and Diagnosis',
     0x08: 'KNXnet/IP Object Server'}
 
-
 KNX_MEDIUMS = {
     0x01: 'reserved',
     0x02: 'KNX TP',
@@ -49,13 +48,11 @@ KNX_MEDIUMS = {
     0x10: 'KNX RF',
     0x20: 'KNX IP'}
 
-
 KNX_BUS_MEDIUMS = {
     0: 'TP1',
     1: 'PL110',
     2: 'RF',
     5: 'KNXnet/IP'}
-
 
 DEVICE_TYPES = {
     0x01: 'System 1 (BCU1)',
@@ -66,6 +63,23 @@ DEVICE_TYPES = {
     0x91: 'TP1 Line/area coupler - Repeater',
     0x90: 'Media coupler TP1-PL110'}
 
+LAYER_TYPES = {
+    0x02: 'TUNNEL_LINKLAYER',
+    0x03: 'DEVICE_MGMT_CONNECTION',
+    0x04: 'TUNNEL_RAW',
+    0x06: 'REMLOG_CONNECTION',
+    0x07: 'REMCONF_CONNECTION',
+    0x08: 'OBJSVR_CONNECTION',
+    0x80: 'TUNNEL_BUSMONITOR'}
+
+_LAYER_TYPES = {
+    'TUNNEL_LINKLAYER': 0x02,
+    'DEVICE_MGMT_CONNECTION': 0x03,
+    'TUNNEL_RAW': 0x04,
+    'REMLOG_CONNECTION': 0x06,
+    'REMCONF_CONNECTION': 0x07,
+    'OBJSVR_CONNECTION': 0x08,
+    'TUNNEL_BUSMONITOR': 0x80}
 
 _KNX_MESSAGE_TYPES = {
     # KNXnet/IP Core
@@ -97,7 +111,6 @@ _KNX_MESSAGE_TYPES = {
     # KNXnet/IP ObjectServer
     0x0800: 'OBJECTSERVER_REQUEST'}
 
-
 KNX_MESSAGE_TYPES = {
     # KNXnet/IP Core
     'SEARCH_REQUEST': 0x0201,
@@ -128,16 +141,15 @@ KNX_MESSAGE_TYPES = {
     # KNXnet/IP ObjectServer
     'OBJECTSERVER_REQUEST': 0x0800}
 
-
 KNX_STATUS_CODES = {
     0x00: 'E_NO_ERROR',
     0x01: 'E_HOST_PROTOCOL_TYPE',
     0x02: 'E_VERSION_NOT_SUPPORTED',
     0x04: 'E_SEQUENCE_NUMBER',
     # CONNECT_RESPONSE status codes
-    0x22: 'E_CONNECTION_TYPE', # requested connection type not supported
-    0x23: 'E_CONNECTION_OPTION', # one or more connection options not supported
-    0x24: 'E_NO_MORE_CONNECTIONS', # max amount of connections reached,
+    0x22: 'E_CONNECTION_TYPE',  # requested connection type not supported
+    0x23: 'E_CONNECTION_OPTION',  # one or more connection options not supported
+    0x24: 'E_NO_MORE_CONNECTIONS',  # max amount of connections reached,
     # CONNECTIONSTATE_RESPONSE status codes
     0x21: 'E_CONNECTION_ID',
     0x26: 'E_DATA_CONNECTION',
@@ -145,51 +157,48 @@ KNX_STATUS_CODES = {
     # CONNECT_ACK status codes
     0x29: 'E_TUNNELLING_LAYER'}
 
-
 # See: http://www.openremote.org/display/knowledge/Common+External+Message+Interface+(cEMI)
 CEMI_PRIMITIVES = {
     0x10: 'L_Raw.req',
-    0x11: 'L_Data.req', # Request
+    0x11: 'L_Data.req',  # Request
     0x13: 'L_Poll_Data.req',
     0x25: 'L_Poll_Data.con',
-    0x2e: 'L_Data.con', # Confirmation
-    0x29: 'L_Data.ind', # Receive a data frame
+    0x2e: 'L_Data.con',  # Confirmation
+    0x29: 'L_Data.ind',  # Receive a data frame
     0x2b: 'L_Busmon.ind',
     0x2d: 'L_Raw.ind',
     0x2f: 'L_Raw.con',
     0xfb: 'M_PropRead.con',
     0xfc: 'M_PropRead.req'}
-    #: 'M_FuncPropCommand.req',
-    #: 'M_FuncPropStateRead.req'}
+#: 'M_FuncPropCommand.req',
+#: 'M_FuncPropStateRead.req'}
 
 
 CEMI_MSG_CODES = {
     'L_Raw.req': 0x10,
-    'L_Data.req': 0x11, # Request
+    'L_Data.req': 0x11,  # Request
     'L_Poll_Data.req': 0x13,
     'L_Poll_Data.con': 0x25,
-    'L_Data.con': 0x2e, # Confirmation
-    'L_Data.ind': 0x29, # Receive a data frame
+    'L_Data.con': 0x2e,  # Confirmation
+    'L_Data.ind': 0x29,  # Receive a data frame
     'L_Busmon.ind': 0x2b,
     'L_Raw.ind': 0x2d,
     'L_Raw.con': 0x2f,
     'M_PropRead.con': 0xfb,
     'M_PropRead.req': 0xfc}
 
-
 _CEMI_MSG_CODES = {
     0x10: 'L_Raw.req',
-    0x11: 'L_Data.req', # Request
+    0x11: 'L_Data.req',  # Request
     0x13: 'L_Poll_Data.req',
     0x25: 'L_Poll_Data.con',
-    0x2e: 'L_Data.con', # Confirmation
-    0x29: 'L_Data.ind', # Receive a data frame
+    0x2e: 'L_Data.con',  # Confirmation
+    0x29: 'L_Data.ind',  # Receive a data frame
     0x2b: 'L_Busmon.ind',
     0x2d: 'L_Raw.ind',
     0x2f: 'L_Raw.con',
     0xfb: 'M_PropRead.con',
     0xfc: 'M_PropRead.req'}
-
 
 CEMI_PRIORITIES = {
     0x00: 'system',
@@ -197,13 +206,11 @@ CEMI_PRIORITIES = {
     0x02: 'urgent',
     0x03: 'low'}
 
-
 COMM_TYPES = {
     0x00: 'Unnumbered Data Packet (UDP)',
     0x01: 'Numbered Data Packet (NDP)',
     0x02: 'Unnumbered Control Data (UCD)',
     0x03: 'Numbered Control Data (NCD)'}
-
 
 CEMI_TPCI_TYPES = {
     'UDP': 0x00,
@@ -211,13 +218,11 @@ CEMI_TPCI_TYPES = {
     'UCD': 0x02,
     'NCD': 0x03}
 
-
 _CEMI_TPCI_TYPES = {
     0x00: 'UDP',
     0x01: 'NDP',
     0x02: 'UCD',
     0x03: 'NCD'}
-
 
 _CEMI_APCI_TYPES = {
     0x000: 'A_GroupValue_Read',
@@ -276,7 +281,6 @@ _CEMI_APCI_TYPES = {
     0x006: 'A_ADC_Read',
     0x0c0: 'A_IndividualAddress_Write'}
 
-
 CEMI_APCI_TYPES = {
     'A_ADC_Read': 0x6,
     'A_ADC_Response': 0x1c0,
@@ -334,7 +338,6 @@ CEMI_APCI_TYPES = {
     'A_UserMemory_Response': 0x2c1,
     'A_UserMemory_Write': 0x2c2}
 
-
 OBJECT_TYPES = {
     0: 'DEVICE_OBJECT',
     1: 'ADDRESSTABLE_OBJECT',
@@ -350,7 +353,6 @@ OBJECT_TYPES = {
     11: 'KNXNET_IP_PARAMETER',
     12: 'APPLICATION_CONTROLLER',
     13: 'FILE_SERVER'}
-
 
 DEVICE_OBJECTS = {
     # global object
@@ -400,7 +402,6 @@ DEVICE_OBJECTS = {
     'PID_DOMAIN_ADDR': 0x46,
     'PID_IO_LIST': 0x47}
 
-
 PARAMETER_OBJECTS = {
     # object 11
     'PID_PROJECT_INSTALLATION_ID': 0x33,
@@ -431,9 +432,8 @@ PARAMETER_OBJECTS = {
     'PID_FRIENDLY_NAME': 0x4c,
     'PID_ROUTING_BUSY_WAIT_TIME': 0x4e}
 
-
 OBJECTS = {
-    0 : {'PID_OBJECT_TYPE': 1,
+    0: {'PID_OBJECT_TYPE': 1,
         'PID_OBJECT_NAME': 2,
         'PID_SEMAPHOR': 3,
         'PID_GROUP_OBJECT_REFERENCE': 4,
@@ -561,34 +561,34 @@ OBJECTS = {
     9: {'PID_GRPOBJTABLE': 51,
         'PID_EXT_GRPOBJREFERENCE': 52},
     10: {'PID_POLLING_STATE': 51,
-        'PID_POLLING_SLAVE_ADDR': 52,
-        'PID_POLL_CYCLE': 53},
+         'PID_POLLING_SLAVE_ADDR': 52,
+         'PID_POLL_CYCLE': 53},
     11: {'PID_PROJECT_INSTALLATION_ID': 51,
-        'PID_KNX_INDIVIDUAL_ADDRESS': 52,
-        'PID_ADDITIONAL_INDIVIDUAL_ADDRESSES': 53,
-        'PID_CURRENT_IP_ASSIGNMENT_METHOD': 54,
-        'PID_IP_ASSIGNMENT_METHOD': 55,
-        'PID_IP_CAPABILITIES': 56,
-        'PID_CURRENT_IP_ADDRESS': 57,
-        'PID_CURRENT_SUBNET_MASK': 58,
-        'PID_CURRENT_DEFAULT_GATEWAY': 59,
-        'PID_IP_ADDRESS': 60,
-        'PID_SUBNET_MASK': 61,
-        'PID_DEFAULT_GATEWAY': 62,
-        'PID_DHCP_BOOTP_SERVER': 63,
-        'PID_MAC_ADDRESS': 64,
-        'PID_SYSTEM_SETUP_MULTICAST_ADDRESS': 65,
-        'PID_ROUTING_MULTICAST_ADDRESS': 66,
-        'PID_TTL': 67,
-        'PID_KNXNETIP_DEVICE_CAPABILITIES': 68,
-        'PID_KNXNETIP_DEVICE_STATE': 69,
-        'PID_KNXNETIP_ROUTING_CAPABILITIES': 70,
-        'PID_PRIORITY_FIFO_ENABLED': 71,
-        'PID_QUEUE_OVERFLOW_TO_IP': 72,
-        'PID_QUEUE_OVERFLOW_TO_KNX': 73,
-        'PID_MSG_TRANSMIT_TO_IP': 74,
-        'PID_MSG_TRANSMIT_TO_KNX': 75,
-        'PID_FRIENDLY_NAME': 76},
+         'PID_KNX_INDIVIDUAL_ADDRESS': 52,
+         'PID_ADDITIONAL_INDIVIDUAL_ADDRESSES': 53,
+         'PID_CURRENT_IP_ASSIGNMENT_METHOD': 54,
+         'PID_IP_ASSIGNMENT_METHOD': 55,
+         'PID_IP_CAPABILITIES': 56,
+         'PID_CURRENT_IP_ADDRESS': 57,
+         'PID_CURRENT_SUBNET_MASK': 58,
+         'PID_CURRENT_DEFAULT_GATEWAY': 59,
+         'PID_IP_ADDRESS': 60,
+         'PID_SUBNET_MASK': 61,
+         'PID_DEFAULT_GATEWAY': 62,
+         'PID_DHCP_BOOTP_SERVER': 63,
+         'PID_MAC_ADDRESS': 64,
+         'PID_SYSTEM_SETUP_MULTICAST_ADDRESS': 65,
+         'PID_ROUTING_MULTICAST_ADDRESS': 66,
+         'PID_TTL': 67,
+         'PID_KNXNETIP_DEVICE_CAPABILITIES': 68,
+         'PID_KNXNETIP_DEVICE_STATE': 69,
+         'PID_KNXNETIP_ROUTING_CAPABILITIES': 70,
+         'PID_PRIORITY_FIFO_ENABLED': 71,
+         'PID_QUEUE_OVERFLOW_TO_IP': 72,
+         'PID_QUEUE_OVERFLOW_TO_KNX': 73,
+         'PID_MSG_TRANSMIT_TO_IP': 74,
+         'PID_MSG_TRANSMIT_TO_KNX': 75,
+         'PID_FRIENDLY_NAME': 76},
     12: {'PID_AR_TYPE_REPORT': 51}}
 
 for k, v in OBJECTS.items():

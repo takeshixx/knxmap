@@ -10,10 +10,12 @@ __all__ = ['KnxGatewaySearch',
 
 LOGGER = logging.getLogger(__name__)
 
+
 class KnxGatewaySearch(asyncio.DatagramProtocol):
     """A protocol implementation for searching KNXnet/IP gateways via
     multicast messages. The protocol will hold a set responses with
     all the KNXnet/IP gateway responses."""
+
     def __init__(self, loop=None):
         self.loop = loop or asyncio.get_event_loop()
         self.transport = None
@@ -25,8 +27,8 @@ class KnxGatewaySearch(asyncio.DatagramProtocol):
         self.sockname = self.transport.get_extra_info('sockname')
         packet = KnxSearchRequest(sockname=self.sockname)
         self.transport.get_extra_info('socket').sendto(packet.get_message(),
-               (KNX_CONSTANTS.get('MULTICAST_ADDR'),
-                KNX_CONSTANTS.get('DEFAULT_PORT')))
+                                                       (KNX_CONSTANTS.get('MULTICAST_ADDR'),
+                                                        KNX_CONSTANTS.get('DEFAULT_PORT')))
 
     def datagram_received(self, data, addr):
         knx_message = parse_message(data)
@@ -36,6 +38,7 @@ class KnxGatewaySearch(asyncio.DatagramProtocol):
 
 class KnxGatewayDescription(asyncio.DatagramProtocol):
     """Protocol implelemtation for KNXnet/IP description requests."""
+
     def __init__(self, future, loop=None, timeout=2):
         self.future = future
         self.loop = loop or asyncio.get_event_loop()

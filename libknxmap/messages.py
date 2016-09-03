@@ -29,6 +29,7 @@ __all__ = ['parse_message',
 
 LOGGER = logging.getLogger(__name__)
 
+
 def parse_message(data):
     """
     Determines the message type of data and returns a corresponding class instance. This is a helper
@@ -211,7 +212,7 @@ class KnxMessage(object):
             message_body = self._pack_knx_body()
         else:
             message_body = self.body
-        self.header['total_length'] = 6 + len(message_body) # header size is always 6
+        self.header['total_length'] = 6 + len(message_body)  # header size is always 6
         self.message = self._pack_knx_header()
         self.message += message_body
 
@@ -269,8 +270,8 @@ class KnxMessage(object):
             LOGGER.exception(e)
 
     def _pack_hpai(self):
-        hpai = struct.pack('!B', 8) # structure_length
-        hpai += struct.pack('!B', 0x01) # protocol code
+        hpai = struct.pack('!B', 8)  # structure_length
+        hpai += struct.pack('!B', 0x01)  # protocol code
         hpai += socket.inet_aton(self.source)
         hpai += struct.pack('!H', self.port)
         return hpai
@@ -347,7 +348,7 @@ class KnxMessage(object):
         cf |= priority << 2
         cf |= (1 if system_broadcast else 0) << 4
         cf |= (1 if repeat_flag else 0) << 5
-        cf |= 0 << 6 # reserved
+        cf |= 0 << 6  # reserved
         cf |= (1 if frame_type else 0) << 7
         return cf
 
@@ -458,17 +459,18 @@ class KnxMessage(object):
         state['USER_APP'] = (data >> 5) & 1
         state['BC_DM'] = (data >> 6) & 1
         # We don't really care about the parity
-        #state['parity'] = (data >> 7) & 1
+        # state['parity'] = (data >> 7) & 1
         return state
 
     def _pack_cemi(self, message_code=None, *args, **kwargs):
         message_code = message_code if message_code else self.cemi_message_code
-        cemi = struct.pack('!B', message_code) # cEMI message code
-        cemi += struct.pack('!B', 0) # add information length # TODO: implement variable length if additional information is included
-        cemi += struct.pack('!B', self.pack_cemi_cf1()) # controlfield 1
-        cemi += struct.pack('!B', self.pack_cemi_cf2(*args, **kwargs)) # controlfield 2
-        cemi += struct.pack('!H', self.knx_source) # source address (KNX address)
-        cemi += struct.pack('!H', self.knx_destination) # KNX destination address (either group or physical)
+        cemi = struct.pack('!B', message_code)  # cEMI message code
+        cemi += struct.pack('!B',
+                            0)  # add information length # TODO: implement variable length if additional information is included
+        cemi += struct.pack('!B', self.pack_cemi_cf1())  # controlfield 1
+        cemi += struct.pack('!B', self.pack_cemi_cf2(*args, **kwargs))  # controlfield 2
+        cemi += struct.pack('!H', self.knx_source)  # source address (KNX address)
+        cemi += struct.pack('!H', self.knx_destination)  # KNX destination address (either group or physical)
         return cemi
 
     def _unpack_cemi(self, message):
@@ -563,7 +565,7 @@ class KnxMessage(object):
                  'DISCONNECT': 0x01}
         assert ucd_type in TYPES.keys(), 'Invalid UCD type: {}'.format(ucd_type)
         cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
-        cemi += struct.pack('!B', 0) # Data length
+        cemi += struct.pack('!B', 0)  # Data length
         npdu = CEMI_TPCI_TYPES.get('UCD') << 14
         npdu |= TYPES.get(ucd_type) << 8
         cemi += struct.pack('!H', npdu)
@@ -585,7 +587,7 @@ class KnxMessage(object):
 
     def apci_device_descriptor_read(self, sequence=0):
         cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
-        cemi += struct.pack('!B', 1) # Data length
+        cemi += struct.pack('!B', 1)  # Data length
         npdu = CEMI_TPCI_TYPES.get('NDP') << 14
         npdu |= sequence << 10
         npdu |= CEMI_APCI_TYPES['A_DeviceDescriptor_Read'] << 0
@@ -595,7 +597,7 @@ class KnxMessage(object):
 
     def apci_individual_address_read(self, sequence=0):
         cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
-        cemi += struct.pack('!B', 1) # Data length
+        cemi += struct.pack('!B', 1)  # Data length
         npdu = CEMI_TPCI_TYPES.get('NDP') << 14
         npdu |= sequence << 10
         npdu |= CEMI_APCI_TYPES['A_IndividualAddress_Read'] << 0
@@ -610,8 +612,8 @@ class KnxMessage(object):
         npdu |= sequence << 10
         npdu |= CEMI_APCI_TYPES['A_Authorize_Request'] << 0
         cemi += struct.pack('!H', npdu)
-        cemi += struct.pack('!B', 0) # reserved
-        cemi += struct.pack('!I', key) # key
+        cemi += struct.pack('!B', 0)  # reserved
+        cemi += struct.pack('!I', key)  # key
         self._pack_knx_body(cemi)
         self.pack_knx_message()
 
@@ -619,16 +621,16 @@ class KnxMessage(object):
                                  num_elements=1, start_index=1):
         """A_PropertyValue_Read"""
         cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
-        cemi += struct.pack('!B', 5) # Data length
+        cemi += struct.pack('!B', 5)  # Data length
         npdu = CEMI_TPCI_TYPES.get('NDP') << 14
         npdu |= sequence << 10
         npdu |= CEMI_APCI_TYPES['A_PropertyValue_Read'] << 0
         cemi += struct.pack('!H', npdu)
-        cemi += struct.pack('!B', object_index) # object index
-        cemi += struct.pack('!B', property_id) # property id
+        cemi += struct.pack('!B', object_index)  # object index
+        cemi += struct.pack('!B', property_id)  # property id
         count_index = num_elements << 12
         count_index |= start_index << 0
-        cemi += struct.pack('!H', count_index) # number of elements + start index
+        cemi += struct.pack('!H', count_index)  # number of elements + start index
         self._pack_knx_body(cemi)
         self.pack_knx_message()
 
@@ -652,11 +654,11 @@ class KnxMessage(object):
     def apci_adc_read(self, sequence=0):
         """A_ADC_Read"""
         cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
-        cemi += struct.pack('!B', 2) # Data length
+        cemi += struct.pack('!B', 2)  # Data length
         npdu = CEMI_TPCI_TYPES.get('NDP') << 14
         npdu |= sequence << 10
         npdu |= CEMI_APCI_TYPES['A_ADC_Read'] << 0
-        npdu |= 1 << 0 # channel nr
+        npdu |= 1 << 0  # channel nr
         cemi += struct.pack('!H', npdu)
         cemi += struct.pack('!B', 0x08)  # data
         self._pack_knx_body(cemi)
@@ -728,11 +730,11 @@ class KnxMessage(object):
         0x01FF EE_EXOR: EEPROM checksum for the range to be checked (cp. CheckLim)
         """
         cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
-        cemi += struct.pack('!B', 3) # Data length
+        cemi += struct.pack('!B', 3)  # Data length
         npdu = CEMI_TPCI_TYPES.get('NDP') << 14
         npdu |= sequence << 10
         npdu |= CEMI_APCI_TYPES['A_Memory_Read'] << 4
-        npdu |= read_count << 0 # number of octets to read/write
+        npdu |= read_count << 0  # number of octets to read/write
         cemi += struct.pack('!H', npdu)
         cemi += struct.pack('!H', memory_address)  # memory address
         self._pack_knx_body(cemi)
@@ -743,14 +745,13 @@ class KnxMessage(object):
         cemi += struct.pack('!B', 1)  # Data length
         npdu = CEMI_TPCI_TYPES.get('UDP') << 14
         npdu |= CEMI_APCI_TYPES['A_GroupValue_Write'] << 6
-        npdu |= value  << 0
+        npdu |= value << 0
         cemi += struct.pack('!H', npdu)
         self._pack_knx_body(cemi)
         self.pack_knx_message()
 
 
 class KnxSearchRequest(KnxMessage):
-
     def __init__(self, message=None, sockname=None):
         super(KnxSearchRequest, self).__init__()
         if message:
@@ -777,7 +778,6 @@ class KnxSearchRequest(KnxMessage):
 
 
 class KnxSearchResponse(KnxMessage):
-
     def __init__(self, message=None):
         super(KnxSearchResponse, self).__init__()
         if message:
@@ -800,7 +800,6 @@ class KnxSearchResponse(KnxMessage):
 
 
 class KnxDescriptionRequest(KnxMessage):
-
     def __init__(self, message=None, sockname=None):
         super(KnxDescriptionRequest, self).__init__()
         if message:
@@ -827,7 +826,6 @@ class KnxDescriptionRequest(KnxMessage):
 
 
 class KnxDescriptionResponse(KnxMessage):
-
     def __init__(self, message=None):
         super(KnxDescriptionResponse, self).__init__()
         if message:
@@ -849,7 +847,6 @@ class KnxDescriptionResponse(KnxMessage):
 
 
 class KnxConnectRequest(KnxMessage):
-
     def __init__(self, message=None, sockname=None, layer_type='TUNNEL_LINKLAYER',
                  connection_type=0x04):
         super(KnxConnectRequest, self).__init__()
@@ -901,7 +898,6 @@ class KnxConnectRequest(KnxMessage):
 
 
 class KnxConnectResponse(KnxMessage):
-
     def __init__(self, message=None):
         super(KnxConnectResponse, self).__init__()
         self.ERROR = None
@@ -939,7 +935,6 @@ class KnxConnectResponse(KnxMessage):
 
 
 class KnxTunnellingRequest(KnxMessage):
-
     def __init__(self, message=None, sockname=None, communication_channel=None,
                  knx_source=None, knx_destination=None, sequence_count=0, message_code=0x11,
                  cemi_ndpu_len=0):
@@ -965,10 +960,10 @@ class KnxTunnellingRequest(KnxMessage):
                 self.port = None
 
     def _pack_knx_body(self, cemi=None):
-        self.body = struct.pack('!B', 4) # structure_length
-        self.body += struct.pack('!B', self.communication_channel) # channel id
-        self.body += struct.pack('!B', self.sequence_count) # sequence counter
-        self.body += struct.pack('!B', 0) # reserved
+        self.body = struct.pack('!B', 4)  # structure_length
+        self.body += struct.pack('!B', self.communication_channel)  # channel id
+        self.body += struct.pack('!B', self.sequence_count)  # sequence counter
+        self.body += struct.pack('!B', 0)  # reserved
         # cEMI
         if cemi:
             self.body += cemi
@@ -990,7 +985,6 @@ class KnxTunnellingRequest(KnxMessage):
 
 
 class KnxTunnellingAck(KnxMessage):
-
     def __init__(self, message=None, communication_channel=None, sequence_count=0):
         super(KnxTunnellingAck, self).__init__()
         if message:
@@ -1002,10 +996,10 @@ class KnxTunnellingAck(KnxMessage):
             self.pack_knx_message()
 
     def _pack_knx_body(self):
-        self.body = struct.pack('!B', 4) # structure_length
-        self.body += struct.pack('!B', self.communication_channel) # channel id
-        self.body += struct.pack('!B', self.sequence_count) # sequence counter
-        self.body += struct.pack('!B', 0) # status
+        self.body = struct.pack('!B', 4)  # structure_length
+        self.body += struct.pack('!B', self.communication_channel)  # channel id
+        self.body += struct.pack('!B', self.sequence_count)  # sequence counter
+        self.body += struct.pack('!B', 0)  # status
         return self.body
 
     def _unpack_knx_body(self, message):
@@ -1020,7 +1014,6 @@ class KnxTunnellingAck(KnxMessage):
 
 
 class KnxConnectionStateRequest(KnxMessage):
-
     def __init__(self, message=None, sockname=None, communication_channel=None):
         super(KnxConnectionStateRequest, self).__init__()
         if message:
@@ -1036,8 +1029,8 @@ class KnxConnectionStateRequest(KnxMessage):
                 self.port = None
 
     def _pack_knx_body(self):
-        self.body = struct.pack('!B', self.communication_channel) # channel id
-        self.body += struct.pack('!B', 0) # reserved
+        self.body = struct.pack('!B', self.communication_channel)  # channel id
+        self.body += struct.pack('!B', 0)  # reserved
         # HPAI
         self.body += self._pack_hpai()
         return self.body
@@ -1054,7 +1047,6 @@ class KnxConnectionStateRequest(KnxMessage):
 
 
 class KnxConnectionStateResponse(KnxMessage):
-
     def __init__(self, message=None, communication_channel=None):
         super(KnxConnectionStateResponse, self).__init__()
         if message:
@@ -1080,7 +1072,6 @@ class KnxConnectionStateResponse(KnxMessage):
 
 
 class KnxDisconnectRequest(KnxMessage):
-
     def __init__(self, message=None, sockname=None, communication_channel=None):
         super(KnxDisconnectRequest, self).__init__()
         if message:
@@ -1096,8 +1087,8 @@ class KnxDisconnectRequest(KnxMessage):
                 self.port = None
 
     def _pack_knx_body(self):
-        self.body = struct.pack('!B', self.communication_channel) # channel id
-        self.body += struct.pack('!B', 0) # reserved
+        self.body = struct.pack('!B', self.communication_channel)  # channel id
+        self.body += struct.pack('!B', 0)  # reserved
         # HPAI
         self.body += self._pack_hpai()
         return self.body
@@ -1114,7 +1105,6 @@ class KnxDisconnectRequest(KnxMessage):
 
 
 class KnxDisconnectResponse(KnxMessage):
-
     def __init__(self, message=None, communication_channel=None,
                  knx_source=None, knx_destination=None):
         super(KnxDisconnectResponse, self).__init__()
@@ -1162,23 +1152,23 @@ class KnxDeviceConfigurationRequest(KnxMessage):
                 self.port = None
 
     def _pack_knx_body(self, cemi=None):
-        self.body = struct.pack('!B', 4) # structure_length
-        self.body += struct.pack('!B', self.communication_channel) # channel id
-        self.body += struct.pack('!B', self.sequence_count) # sequence counter
-        self.body += struct.pack('!B', 0) # reserved
+        self.body = struct.pack('!B', 4)  # structure_length
+        self.body += struct.pack('!B', self.communication_channel)  # channel id
+        self.body += struct.pack('!B', self.sequence_count)  # sequence counter
+        self.body += struct.pack('!B', 0)  # reserved
         # cEMI
-        #if cemi:
+        # if cemi:
         #    self.body += cemi
-        #else:
+        # else:
         #    self.body += self._pack_cemi()
 
-        self.body += struct.pack('!B', self.cemi_message_code) # M_PropRead.req
-        #self.body += struct.pack('!B', CEMI_MESSAGE_CODES.get('L_Data.req'))
+        self.body += struct.pack('!B', self.cemi_message_code)  # M_PropRead.req
+        # self.body += struct.pack('!B', CEMI_MESSAGE_CODES.get('L_Data.req'))
         self.body += struct.pack('!H', 11)
         self.body += struct.pack('!B', 11)
         self.body += struct.pack('!B', PARAMETER_OBJECTS.get('PID_ADDITIONAL_INDIVIDUAL_ADDRESSES'))
-        #self.body += struct.pack('!B', DEVICE_OBJECTS.get('PID_SERIAL_NUMBER'))
-        #self.body += struct.pack('!H', 0x1001)
+        # self.body += struct.pack('!B', DEVICE_OBJECTS.get('PID_SERIAL_NUMBER'))
+        # self.body += struct.pack('!H', 0x1001)
         self.body += struct.pack('!B', 0x10)
         self.body += struct.pack('!B', 0x00)
 
@@ -1195,14 +1185,13 @@ class KnxDeviceConfigurationRequest(KnxMessage):
             self.body['sequence_counter'] = self._unpack_stream('!B', message)
             self.body['reserved'] = self._unpack_stream('!B', message)
             # cEMI
-            #self.body['cemi'] = self._unpack_cemi(message)
+            # self.body['cemi'] = self._unpack_cemi(message)
             self.body['the_end'] = message.read()
         except Exception as e:
             LOGGER.exception(e)
 
 
 class KnxDeviceConfigurationAck(KnxMessage):
-
     def __init__(self, message=None, communication_channel=None, sequence_count=0):
         super(KnxDeviceConfigurationAck, self).__init__()
         if message:
@@ -1214,10 +1203,10 @@ class KnxDeviceConfigurationAck(KnxMessage):
             self.pack_knx_message()
 
     def _pack_knx_body(self):
-        self.body = struct.pack('!B', 4) # structure_length
-        self.body += struct.pack('!B', self.communication_channel) # channel id
-        self.body += struct.pack('!B', self.sequence_count) # sequence counter
-        self.body += struct.pack('!B', 0) # status
+        self.body = struct.pack('!B', 4)  # structure_length
+        self.body += struct.pack('!B', self.communication_channel)  # channel id
+        self.body += struct.pack('!B', self.sequence_count)  # sequence counter
+        self.body += struct.pack('!B', 0)  # status
         return self.body
 
     def _unpack_knx_body(self, message):
@@ -1232,7 +1221,6 @@ class KnxDeviceConfigurationAck(KnxMessage):
 
 
 class KnxRoutingIndication(KnxMessage):
-
     def __init__(self, message=None, knx_source='0.0.0', knx_destination=None):
         super(KnxRoutingIndication, self).__init__()
         if message:
@@ -1261,7 +1249,6 @@ class KnxRoutingIndication(KnxMessage):
 
 
 class KnxRoutingLostMessage(KnxMessage):
-
     def __init__(self, message=None):
         super(KnxRoutingLostMessage, self).__init__()
         if message:
@@ -1271,9 +1258,9 @@ class KnxRoutingLostMessage(KnxMessage):
             self.pack_knx_message()
 
     def _pack_knx_body(self):
-        self.body = struct.pack('!B', 4) # structure_length
-        self.body += struct.pack('!B', 0) # device state
-        self.body += struct.pack('!H', 0) # number of lost messages
+        self.body = struct.pack('!B', 4)  # structure_length
+        self.body += struct.pack('!B', 0)  # device state
+        self.body += struct.pack('!H', 0)  # number of lost messages
         return self.body
 
     def _unpack_knx_body(self, message):
@@ -1287,7 +1274,6 @@ class KnxRoutingLostMessage(KnxMessage):
 
 
 class KnxRoutingBusy(KnxMessage):
-
     def __init__(self, message=None):
         super(KnxRoutingBusy, self).__init__()
         if message:
@@ -1297,9 +1283,9 @@ class KnxRoutingBusy(KnxMessage):
             self.pack_knx_message()
 
     def _pack_knx_body(self):
-        self.body = struct.pack('!B', 4) # structure_length
-        self.body += struct.pack('!B', 0) # device state
-        self.body += struct.pack('!H', 0) # routing busy wait time
+        self.body = struct.pack('!B', 4)  # structure_length
+        self.body += struct.pack('!B', 0)  # device state
+        self.body += struct.pack('!H', 0)  # routing busy wait time
         self.body += struct.pack('!H', 0)  # routing busy control field
         return self.body
 
