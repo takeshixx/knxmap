@@ -387,9 +387,9 @@ class KnxMap:
         if targets:
             self.set_targets(targets)
         if group_monitor_mode:
-            LOGGER.info('Starting group monitor')
+            LOGGER.debug('Starting group monitor')
         else:
-            LOGGER.info('Starting bus monitor')
+            LOGGER.debug('Starting bus monitor')
         future = asyncio.Future()
         transport, protocol = yield from self.loop.create_datagram_endpoint(
             functools.partial(KnxBusMonitor, future, group_monitor=group_monitor_mode),
@@ -397,9 +397,9 @@ class KnxMap:
         self.bus_protocols.append(protocol)
         yield from future
         if group_monitor_mode:
-            LOGGER.info('Starting group monitor')
+            LOGGER.debug('Starting group monitor')
         else:
-            LOGGER.info('Starting bus monitor')
+            LOGGER.debug('Starting bus monitor')
 
     @asyncio.coroutine
     def search(self, search_timeout=5, iface=None):

@@ -82,14 +82,17 @@ class KnxBusMonitor(KnxTunnelConnection):
         assert isinstance(message, KnxTunnellingRequest)
         if self.group_monitor:
             format = ('[ chan_id: {chan_id}, seq_no: {seq_no}, message_code: {msg_code}, '
-                      'source_addr: {src_addr}, dest_addr: {dst_addr}, tcpi: {tcpi}, apci: {apci} ]').format(
+                      'source_addr: {src_addr}, dest_addr: {dst_addr}, tpci_type: {tpci_type}, '
+                      'tpci_seq: {tpci_seq}, apci_type: {apci_type}, apci_data: {apci_data} ]').format(
                 chan_id=message.body.get('communication_channel_id'),
                 seq_no=message.body.get('sequence_counter'),
                 msg_code=CEMI_PRIMITIVES[message.body.get('cemi').get('message_code')],
                 src_addr=message.parse_knx_address(message.body.get('cemi').get('knx_source')),
                 dst_addr=message.parse_knx_group_address(message.body.get('cemi').get('knx_destination')),
-                tcpi=message.body.get('cemi').get('tcpi'),
-                apci=message.body.get('cemi').get('apci'))
+                tpci_type=_CEMI_TPCI_TYPES.get(message.body.get('cemi').get('tpci').get('type')),
+                tpci_seq=message.body.get('cemi').get('tpci').get('sequence'),
+                apci_type=_CEMI_APCI_TYPES.get(message.body.get('cemi').get('apci').get('type')),
+                apci_data=message.body.get('cemi').get('apci').get('data'))
         else:
             format = ('[ chan_id: {chan_id}, seq_no: {seq_no}, message_code: {msg_code}, '
                       'raw_frame: {raw_frame} ]').format(
