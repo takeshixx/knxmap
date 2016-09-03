@@ -100,6 +100,7 @@ class KnxMessage(object):
         self.port = None
         self.knx_source = None
         self.knx_destination = None
+        self.cemi_message_code = None
 
     @staticmethod
     def parse_knx_address(address):
@@ -111,7 +112,7 @@ class KnxMessage(object):
         --------------------
         4 Bit|4 Bit| 8 Bit
 
-        >>> parse_knx_address(99999)
+        parse_knx_address(99999)
         '8.6.159'
         """
         assert isinstance(address, int)
@@ -121,7 +122,7 @@ class KnxMessage(object):
     def pack_knx_address(address):
         """Pack physical/individual KNX address.
 
-        >>> pack_knx_address('15.15.255')
+        pack_knx_address('15.15.255')
         65535
         """
         assert isinstance(address, str)
@@ -132,7 +133,7 @@ class KnxMessage(object):
     def parse_knx_group_address(address):
         """Parse KNX group address.
 
-        >>> parse_knx_group_address(12345)
+        parse_knx_group_address(12345)
         '6/0/57'
         """
         assert isinstance(address, int)
@@ -142,7 +143,7 @@ class KnxMessage(object):
     def pack_knx_group_address(address):
         """Pack KNX group address.
 
-        >>> pack_knx_group_address('6/0/57')
+        pack_knx_group_address('6/0/57')
         12345
         """
         assert isinstance(address, str)
@@ -153,7 +154,7 @@ class KnxMessage(object):
     def parse_knx_device_serial(address):
         """Parse a KNX device serial to human readable format.
 
-        >>> parse_knx_device_serial(b'\x00\x00\x00\x00\X12\x23')
+        parse_knx_device_serial(b'\x00\x00\x00\x00\X12\x23')
         '000000005C58'
         """
         assert isinstance(address, bytes)
@@ -163,7 +164,7 @@ class KnxMessage(object):
     def parse_mac_address(address):
         """Parse a MAC address to human readable format.
 
-        >>> parse_mac_address(b'\x12\x34\x56\x78\x90\x12')
+        parse_mac_address(b'\x12\x34\x56\x78\x90\x12')
         '12:34:56:78:90:12'
         """
         assert isinstance(address, bytes)
@@ -173,7 +174,7 @@ class KnxMessage(object):
     def parse_device_descriptor(desc):
         """Parse device descriptors to three separate integers.
 
-        >>> parse_device_descriptor(1793)
+        parse_device_descriptor(1793)
         (0, 112, 1)
         """
         assert isinstance(desc, int), 'Device descriptor is not an int'
@@ -184,14 +185,14 @@ class KnxMessage(object):
         return medium, dev_type, version
 
     def set_peer(self, peer):
-        assert isinstance(peer, tuple), ('Peer is not a tuple')
+        assert isinstance(peer, tuple), 'Peer is not a tuple'
         self.source, self.port = peer
 
     def set_source_ip(self, address):
         self.source = address
 
     def set_source_port(self, port):
-        assert isinstance(port, int), ('Port is not an int')
+        assert isinstance(port, int), 'Port is not an int'
         self.port = port
 
     def set_knx_source(self, address):
@@ -241,7 +242,7 @@ class KnxMessage(object):
         except struct.error as e:
             LOGGER.exception(e)
 
-    def _pack_knx_body(self):
+    def _pack_knx_body(self, *args, **kwargs):
         """Subclasses must define this method."""
         raise NotImplementedError
 
@@ -465,8 +466,8 @@ class KnxMessage(object):
     def _pack_cemi(self, message_code=None, *args, **kwargs):
         message_code = message_code if message_code else self.cemi_message_code
         cemi = struct.pack('!B', message_code)  # cEMI message code
-        cemi += struct.pack('!B',
-                            0)  # add information length # TODO: implement variable length if additional information is included
+        # TODO: implement variable length if additional information is included
+        cemi += struct.pack('!B', 0)  # add information length
         cemi += struct.pack('!B', self.pack_cemi_cf1())  # controlfield 1
         cemi += struct.pack('!B', self.pack_cemi_cf2(*args, **kwargs))  # controlfield 2
         cemi += struct.pack('!H', self.knx_source)  # source address (KNX address)
@@ -534,7 +535,7 @@ class KnxMessage(object):
                 tpci_unpacked['apci_data'] |= ((tpci[1] >> 4) & 1) << 4
                 tpci_unpacked['apci_data'] |= ((tpci[1] >> 5) & 1) << 5
             else:
-                tpci_unpacked['apci'] = tpci_unpacked['apci'] << 2
+                tpci_unpacked['apci'] <<= 2
                 tpci_unpacked['apci'] |= ((tpci[1] >> 4) & 1) << 0
                 tpci_unpacked['apci'] |= ((tpci[1] >> 5) & 1) << 1
 
@@ -545,7 +546,7 @@ class KnxMessage(object):
                     tpci_unpacked['apci_data'] |= ((tpci[1] >> 2) & 1) << 2
                     tpci_unpacked['apci_data'] |= ((tpci[1] >> 3) & 1) << 3
                 else:
-                    tpci_unpacked['apci'] = tpci_unpacked['apci'] << 4
+                    tpci_unpacked['apci'] <<= 4
                     tpci_unpacked['apci'] |= ((tpci[1] >> 0) & 1) << 0
                     tpci_unpacked['apci'] |= ((tpci[1] >> 1) & 1) << 1
                     tpci_unpacked['apci'] |= ((tpci[1] >> 2) & 1) << 2
@@ -561,28 +562,24 @@ class KnxMessage(object):
         return cemi
 
     def tpci_unnumbered_control_data(self, ucd_type):
-        TYPES = {'CONNECT': 0x00,
-                 'DISCONNECT': 0x01}
-        assert ucd_type in TYPES.keys(), 'Invalid UCD type: {}'.format(ucd_type)
+        assert ucd_type in TPCI_UNNUMBERED_CONTROL_DATA_TYPES.keys(), 'Invalid UCD type: {}'.format(ucd_type)
         cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 0)  # Data length
         npdu = CEMI_TPCI_TYPES.get('UCD') << 14
-        npdu |= TYPES.get(ucd_type) << 8
+        npdu |= TPCI_UNNUMBERED_CONTROL_DATA_TYPES.get(ucd_type) << 8
         cemi += struct.pack('!H', npdu)
-        self._pack_knx_body(cemi)
+        self._pack_knx_body(cemi=cemi)
         self.pack_knx_message()
 
     def tpci_numbered_control_data(self, ncd_type, sequence=0):
-        TYPES = {'ACK': 0x02,
-                 'NACK': 0x03}
-        assert ncd_type in TYPES.keys(), 'Invalid NCD type: {}'.format(ncd_type)
+        assert ncd_type in TPCI_NUMBERED_CONTROL_DATA_TYPES.keys(), 'Invalid NCD type: {}'.format(ncd_type)
         cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 0)  # Data length
         npdu = CEMI_TPCI_TYPES.get('NCD') << 14
         npdu |= sequence << 10
-        npdu |= TYPES.get(ncd_type) << 8
+        npdu |= TPCI_NUMBERED_CONTROL_DATA_TYPES.get(ncd_type) << 8
         cemi += struct.pack('!H', npdu)
-        self._pack_knx_body(cemi)
+        self._pack_knx_body(cemi=cemi)
         self.pack_knx_message()
 
     def apci_device_descriptor_read(self, sequence=0):
@@ -592,7 +589,7 @@ class KnxMessage(object):
         npdu |= sequence << 10
         npdu |= CEMI_APCI_TYPES['A_DeviceDescriptor_Read'] << 0
         cemi += struct.pack('!H', npdu)
-        self._pack_knx_body(cemi)
+        self._pack_knx_body(cemi=cemi)
         self.pack_knx_message()
 
     def apci_individual_address_read(self, sequence=0):
@@ -602,7 +599,7 @@ class KnxMessage(object):
         npdu |= sequence << 10
         npdu |= CEMI_APCI_TYPES['A_IndividualAddress_Read'] << 0
         cemi += struct.pack('!H', npdu)
-        self._pack_knx_body(cemi)
+        self._pack_knx_body(cemi=cemi)
         self.pack_knx_message()
 
     def apci_authorize_request(self, sequence=0, key=0xffffffff):
@@ -614,7 +611,7 @@ class KnxMessage(object):
         cemi += struct.pack('!H', npdu)
         cemi += struct.pack('!B', 0)  # reserved
         cemi += struct.pack('!I', key)  # key
-        self._pack_knx_body(cemi)
+        self._pack_knx_body(cemi=cemi)
         self.pack_knx_message()
 
     def apci_property_value_read(self, sequence=0, object_index=0, property_id=0x0f,
@@ -631,7 +628,7 @@ class KnxMessage(object):
         count_index = num_elements << 12
         count_index |= start_index << 0
         cemi += struct.pack('!H', count_index)  # number of elements + start index
-        self._pack_knx_body(cemi)
+        self._pack_knx_body(cemi=cemi)
         self.pack_knx_message()
 
     def apci_property_description_read(self, sequence=0, object_index=0, property_id=0x0f,
@@ -648,7 +645,7 @@ class KnxMessage(object):
         count_index = num_elements << 12
         count_index |= start_index << 0
         cemi += struct.pack('!H', count_index)  # number of elements + start index
-        self._pack_knx_body(cemi)
+        self._pack_knx_body(cemi=cemi)
         self.pack_knx_message()
 
     def apci_adc_read(self, sequence=0):
@@ -661,7 +658,7 @@ class KnxMessage(object):
         npdu |= 1 << 0  # channel nr
         cemi += struct.pack('!H', npdu)
         cemi += struct.pack('!B', 0x08)  # data
-        self._pack_knx_body(cemi)
+        self._pack_knx_body(cemi=cemi)
         self.pack_knx_message()
 
     def apci_memory_read(self, sequence=0, memory_address=0x0060, read_count=1):
@@ -737,7 +734,7 @@ class KnxMessage(object):
         npdu |= read_count << 0  # number of octets to read/write
         cemi += struct.pack('!H', npdu)
         cemi += struct.pack('!H', memory_address)  # memory address
-        self._pack_knx_body(cemi)
+        self._pack_knx_body(cemi=cemi)
         self.pack_knx_message()
 
     def apci_group_value_write(self, value=0):
@@ -747,7 +744,7 @@ class KnxMessage(object):
         npdu |= CEMI_APCI_TYPES['A_GroupValue_Write'] << 6
         npdu |= value << 0
         cemi += struct.pack('!H', npdu)
-        self._pack_knx_body(cemi)
+        self._pack_knx_body(cemi=cemi)
         self.pack_knx_message()
 
 
@@ -929,7 +926,7 @@ class KnxConnectResponse(KnxMessage):
             self.body['data_block']['structure_length'] = self._unpack_stream('!B', message)
             self.body['data_block']['connection_type'] = self._unpack_stream('!B', message)
             if self.body['data_block']['connection_type'] == 0x04:
-                self.body['data_block']['knx_address'] = self.parse_knx_address(self._unpack_stream('!H', message))
+                self.body['data_block']['knx_address'] = super().parse_knx_address(self._unpack_stream('!H', message))
         except Exception as e:
             LOGGER.exception(e)
 
@@ -1105,8 +1102,7 @@ class KnxDisconnectRequest(KnxMessage):
 
 
 class KnxDisconnectResponse(KnxMessage):
-    def __init__(self, message=None, communication_channel=None,
-                 knx_source=None, knx_destination=None):
+    def __init__(self, message=None, communication_channel=None):
         super(KnxDisconnectResponse, self).__init__()
         if message:
             self.unpack_knx_message(message)
@@ -1143,7 +1139,7 @@ class KnxDeviceConfigurationRequest(KnxMessage):
             self.communication_channel = communication_channel
             self.sequence_count = sequence_count
             self.cemi_message_code = message_code
-            self.cemi_npdu_len = 0
+            self.cemi_npdu_len = cemi_ndpu_len
             try:
                 self.source, self.port = sockname
                 self.pack_knx_message()

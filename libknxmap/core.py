@@ -1,13 +1,10 @@
 import asyncio
-import binascii
 import codecs
 import collections
 import functools
 import logging
-import os
 import socket
 import struct
-import sys
 import time
 
 try:
@@ -381,7 +378,7 @@ class KnxMap:
 
                     self.knx_gateways.append(t)
                 self.q.task_done()
-        except (asyncio.CancelledError, asyncio.QueueEmpty) as e:
+        except (asyncio.CancelledError, asyncio.QueueEmpty):
             pass
 
     @asyncio.coroutine
@@ -471,7 +468,7 @@ class KnxMap:
 
         if routing:
             # Use KNX Routing to write group values
-            if not 'KNXnet/IP Routing' in knx_gateway.supported_services:
+            if 'KNXnet/IP Routing' not in knx_gateway.supported_services:
                 LOGGER.error('KNX gateway {gateway} does not support Routing'.format(
                     gateway=knx_gateway.host))
 
@@ -498,7 +495,7 @@ class KnxMap:
 
         else:
             # Use KNX Tunnelling to write group values
-            if not 'KNXnet/IP Tunnelling' in knx_gateway.supported_services:
+            if 'KNXnet/IP Tunnelling' not in knx_gateway.supported_services:
                 LOGGER.error('KNX gateway {gateway} does not support Routing'.format(
                     gateway=knx_gateway.host))
 
