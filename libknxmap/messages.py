@@ -201,7 +201,12 @@ class KnxMessage(object):
 
     def set_knx_destination(self, address):
         """Set the KNX destination address of a KnxMessage instance."""
-        self.knx_destination = self.pack_knx_address(address)
+        if '.' in address:
+            self.knx_destination = self.pack_knx_address(address)
+        elif '/' in address:
+            self.knx_destination = self.pack_knx_group_address(address)
+        else:
+            LOGGER.error('Invalid address')
 
     def get_message(self):
         """Return the current message."""
