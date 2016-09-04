@@ -1,20 +1,10 @@
 # KNXmap
 
-A tool for scanning and auditing KNXnet/IP gateways on IP driven networks. In addition to search and identify gateways KNXmap allows to scan for devices on the KNX bus via KNXnet/IP gateways.
+A tool for scanning and auditing KNXnet/IP gateways on IP driven networks. KNXnet/IP defines Ethernet as physical communication media for KNX (EN 50090, ISO/IEC 14543). KNXmap also allows to scan for devices on the KNX bus via KNXnet/IP gateways. In addition to scanning, KNXmap supports other modes to interact with KNX gateways like monitor bus messages or write arbitrary values to group addresses.
 
 ## Compatibility
 
-KNXmap is based on the [asyncio](https://docs.python.org/3/library/asyncio.html) module which is available for Python 3.3 and newer. Users of Python 3.3 must install `asyncio` from [PyPI](https://pypi.python.org/pypi), Python 3.4 ships it in the standard library by default. Therefore KNXmap requires Python 3.3 or any newer version of Python.
-
-## KNX
-
-KNX is a standardized (EN 50090, ISO/IEC 14543), OSI-based network communications protocol for building automation. KNX is the successor to, and convergence of, three previous standards: the European Home Systems Protocol (EHS), BatiBUS, and the European Installation Bus (EIB or Instabus). The KNX standard is administered by the [KNX Association](https://www.knx.org/knx-en/index.php). ([Source](https://en.wikipedia.org/wiki/KNX_\(standard\)))
-
-### KNXnet/IP
-
-KNXnet/IP defines Ethernet as physical communication media. It basically allows administrators to manage KNX bus devices via IP driven networks.
-
-**Note**: Unfourtunately the standard is proprietary which makes it impossible to be included in this repository.
+KNXmap is based on the [asyncio](https://docs.python.org/3/library/asyncio.html) module which is available for Python 3.3 and newer. Users of Python 3.3 must install `asyncio` from [PyPI](https://pypi.python.org/pypi), Python 3.4 ships it in the standard library.
 
 ## Usage
 
@@ -119,5 +109,5 @@ knxmap.py write 192.168.1.100 0/0/1 1
 Enable full debugging and verbosity for development:
 
 ```
-PYTHONASYNCIODEBUG=1 knxmap.py 192.168.178.20 --bus-targets 1.1.0-1.1.6 --bus-info -v
+PYTHONASYNCIODEBUG=1 knxmap.py -v scan 192.168.178.20 --bus-targets 1.1.0-1.1.6 --bus-info
 ```
