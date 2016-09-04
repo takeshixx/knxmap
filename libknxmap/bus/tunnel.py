@@ -347,11 +347,11 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             sequence=self.tpci_seq_counts.get(target))
         value = yield from self.send_data(tunnel_request.get_message(), target)
         yield from self.tpci_send_ncd(target)
-        cemi = value.body.get('cemi')
-        if isinstance(value, KnxTunnellingRequest) and \
-                cemi.get('apci').get('type') == CEMI_APCI_TYPES.get('A_DeviceDescriptor_Response') and \
-                cemi.get('data'):
-            return value.body.get('cemi').get('data')
+        if isinstance(value, KnxTunnellingRequest):
+            cemi = value.body.get('cemi')
+            if cemi.get('apci').get('type') == CEMI_APCI_TYPES.get('A_DeviceDescriptor_Response') and \
+                    cemi.get('data'):
+                return value.body.get('cemi').get('data')
         else:
             return False
 
