@@ -6,17 +6,6 @@ A tool for scanning and auditing KNXnet/IP gateways on IP driven networks. KNXne
 
 KNXmap is based on the [asyncio](https://docs.python.org/3/library/asyncio.html) module which is available for Python 3.3 and newer. Users of Python 3.3 must install `asyncio` from [PyPI](https://pypi.python.org/pypi), Python 3.4 ships it in the standard library.
 
-<<<<<<< HEAD
-## KNX
-
-KNX is a standardized (EN 50090, ISO/IEC 14543), OSI-based network communications protocol for building automation. KNX is the successor to, and convergence of, three previous standards: the European Home Systems Protocol (EHS), BatiBUS, and the European Installation Bus (EIB or Instabus). The KNX standard is administered by the [KNX Association](https://www.knx.org/knx-en/index.php). ([Source](https://en.wikipedia.org/wiki/KNX_\(standard\)))
-
-### KNXnet/IP
-
-KNXnet/IP defines Ethernet as physical communication media. It basically allows administrators to manage KNX bus devices via IP driven networks.
-
-**Note**: Unfourtunately the standard is proprietary which makes it impossible to be included in this repository.
-=======
 ## Usage
 
 Install and run KNXmap:
@@ -32,7 +21,6 @@ Or just invoke the script locally:
 chmod +x knxmap.py
 ./knxmap.py --help
 ```
->>>>>>> develop
 
 ## Scanning Modes
 
@@ -96,15 +84,6 @@ KNXmap supports two different monitoring modes:
 
 * Bus monitoring: prints the raw messages received from the KNX bus.
 
-<<<<<<< HEAD
-These monitoring modes can be useful for debugging communication on the bus. Additionally, they can be used for passive information gathering which allows to identify bus devices without sending messages to any individual or group address. Especially motion sensors or other devices that frequently send messages to the bus can easily be identified via bus monitoring.
-
-## TODO
- 
-* Implement KNXnet/IP Routing (bus.py)
-    * KNXnet/IP router device required (not available yet)
-* Implement [KNX ObjectServer protocol](http://www.weinzierl.de/images/download/products/770/KNX_BAOS_Protocol.pdf) (objectserver.py)
-=======
 ```
 knxmap.py monitor 192.168.1.100
 ```
@@ -124,7 +103,6 @@ KNXmap allows one to write arbitrary values to any group address on the bus. The
 ```
 knxmap.py write 192.168.1.100 0/0/1 1
 ```
->>>>>>> develop
 
 ## Hacking
 
