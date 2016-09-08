@@ -15,12 +15,12 @@ elif sys.version_info.major > 2 and \
     install_require.append('asyncio')
 
 setup(name='KNXmap',
-      version='',
+      version='v0.9.0',
       packages=['libknxmap'],
       scripts=['knxmap.py'],
       install_requires=install_require,
-      url='https://github.com/takeshixx/knxmap',
+      url='https://github.com/ernw/knxmap',
       license='GNU GPLv3',
       author='takeshix',
-      author_email='takeshix@adversec.com',
+      author_email='knxmap@adversec.com',
       description='KNXnet/IP network and bus mapper')
