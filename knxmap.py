@@ -43,9 +43,6 @@ ARGS.add_argument(
     '--workers', action='store', type=int, metavar='N',
     default=30, help='Limit concurrent workers')
 ARGS.add_argument(
-    '--key', action='store', dest='auth_key', type=int,
-    default=0xffffffff, help='Authorize key for System 2 and System 7 devices')
-ARGS.add_argument(
     '--timeout', action='store', dest='timeout', type=int,
     default=2, help='Timeout in seconds for unicast description responses')
 ARGS.add_argument(
@@ -56,11 +53,14 @@ pscan = SUBARGS.add_parser('scan', help='Scan KNXnet/IP gateways and attached bu
 pscan.add_argument(
     'targets', help='KNXnet/IP gateway', metavar='gateway')
 pscan.add_argument(
-    '--bus-targets', action='store', dest='bus_targets',
+    'bus_targets', action='store',
     default=None, help='Bus target range (e.g. 1.1.0-1.1.10)')
 pscan.add_argument(
     '--bus-info', action='store_true', dest='bus_info',
     default=False, help='Try to extract information from alive bus devices')
+pscan.add_argument(
+    '--key', action='store', dest='auth_key',
+    default=0xffffffff, help='Authorize key for System 2 and System 7 devices')
 
 psearch = SUBARGS.add_parser('search',
                              help='Search for KNXnet/IP gateways on the local network')
@@ -78,6 +78,38 @@ pwrite.add_argument(
 pwrite.add_argument(
     '--routing', action='store_true', dest='routing',
     default=False, help='Use Routing instead of Tunnelling')
+
+papci = SUBARGS.add_parser('apci', help='Execute an APCI function')
+papci.add_argument(
+    'targets', help='KNXnet/IP gateway', metavar='gateway')
+papci.add_argument(
+    'device', help='An individual KNX address')
+papci.add_argument(
+    'apci_type', default=0, help='APCI type')
+papci.add_argument(
+    '--routing', action='store_true', dest='routing',
+    default=False, help='Use Routing instead of Tunnelling')
+papci.add_argument(
+    '--memory-address', action='store', dest='memory_address',
+    default=0x0060, help='Memory address')
+papci.add_argument(
+    '--read-count', action='store_true', dest='read_count',
+    default=1, help='Number of bytes to read from memory')
+papci.add_argument(
+    '--object-index', action='store', dest='object_index',
+    default=0, help='TBD')
+papci.add_argument(
+    '--property-id', action='store', dest='property_id',
+    default=0x0f, help='TBD')
+papci.add_argument(
+    '--elements', action='store', dest='num_elements',
+    default=1, help='TBD')
+papci.add_argument(
+    '--start-index', action='store', dest='start_index',
+    default=1, help='TBD')
+papci.add_argument(
+    '--key', action='store', dest='auth_key',
+    default=0xffffffff, help='Authorize key for System 2 and System 7 devices')
 
 pbrute = SUBARGS.add_parser('brute', help='Bruteforce authentication key')
 pbrute.add_argument(
@@ -117,6 +149,13 @@ def main():
             loop.run_until_complete(knxmap.search(
                 search_timeout=args.search_timeout,
                 iface=args.iface))
+        elif args.cmd == 'apci':
+            loop.run_until_complete(knxmap.apci(
+                target=args.device,
+                desc_timeout=args.timeout,
+                desc_retries=args.retries,
+                iface=args.iface,
+                args=args))
         elif args.cmd == 'write':
             loop.run_until_complete(knxmap.group_writer(
                 target=args.group_write_address,

@@ -514,3 +514,122 @@ class KnxMap:
                     value = int(value)
                 yield from protocol.apci_group_value_write(target, value=value)
                 protocol.knx_tunnel_disconnect()
+
+
+    @asyncio.coroutine
+    def apci(self, target, desc_timeout=2, desc_retries=2, iface=False, args=None):
+        self.desc_timeout = desc_timeout
+        self.desc_retries = desc_retries
+        self.iface = iface
+        workers = [asyncio.Task(self.knx_description_worker(), loop=self.loop)
+                   for _ in range(self.max_workers if len(self.targets) > self.max_workers else len(self.targets))]
+        self.t0 = time.time()
+        yield from self.q.join()
+        self.t1 = time.time()
+        for w in workers:
+            w.cancel()
+
+        if self.knx_gateways:
+            # TODO: make sure only a single gateway is supplied
+            knx_gateway = self.knx_gateways[0]
+        else:
+            LOGGER.error('No valid KNX gateway found')
+            return
+
+        # Use KNX Tunnelling to write group values
+        if 'KNXnet/IP Tunnelling' not in knx_gateway.supported_services:
+            LOGGER.error('KNX gateway {gateway} does not support Routing'.format(
+                gateway=knx_gateway.host))
+
+        future = asyncio.Future()
+        transport, protocol = yield from self.loop.create_datagram_endpoint(
+            functools.partial(KnxTunnelConnection, future),
+            remote_addr=(knx_gateway.host, knx_gateway.port))
+        self.bus_protocols.append(protocol)
+
+        # Make sure the tunnel has been established
+        connected = yield from future
+
+        if connected:
+            if args.apci_type == 'Memory_Read':
+                # TODO: read device descriptor first to check if authorization is required
+                memory_address = args.memory_address
+                if not isinstance(memory_address, int):
+                    try:
+                        memory_address = int(memory_address, 16)
+                    except ValueError:
+                        LOGGER.error('Invalid property ID')
+                        protocol.knx_tunnel_disconnect()
+                        return
+                alive = yield from protocol.tpci_connect(target)
+                if alive:
+                    data = yield from protocol.apci_memory_read(
+                        target,
+                        memory_address=memory_address,
+                        read_count=args.read_count)
+                    yield from protocol.tpci_disconnect(target)
+                    if not data:
+                        LOGGER.debug('No data received')
+                    else:
+                        LOGGER.info(codecs.encode(data, 'hex'))
+            elif args.apci_type == 'PropertyValue_Read':
+                property_id = args.property_id
+                if not isinstance(property_id, int):
+                    try:
+                        property_id = int(property_id, 16)
+                    except ValueError:
+                        LOGGER.error('Invalid property ID')
+                        protocol.knx_tunnel_disconnect()
+                        return
+                alive = yield from protocol.tpci_connect(target)
+                if alive:
+                    data = yield from protocol.apci_property_value_read(
+                        target,
+                        object_index=args.object_index,
+                        property_id=property_id,
+                        num_elements=args.num_elements,
+                        start_index=args.start_index)
+                    yield from protocol.tpci_disconnect(target)
+                    if not data:
+                        LOGGER.debug('No data received')
+                    else:
+                        LOGGER.info(codecs.encode(data, 'hex'))
+            elif args.apci_type == 'DeviceDescriptor_Read':
+                alive = yield from protocol.tpci_connect(target)
+                if alive:
+                    data = yield from protocol.apci_device_descriptor_read(target)
+                    yield from protocol.tpci_disconnect(target)
+                    if not data:
+                        LOGGER.debug('No data received')
+                    else:
+                        LOGGER.info(codecs.encode(data, 'hex'))
+            elif args.apci_type == 'Authorize':
+                auth_key = args.auth_key
+                if not isinstance(auth_key, int):
+                    try:
+                        auth_key = int(auth_key, 16)
+                    except ValueError:
+                        LOGGER.error('Invalid property ID')
+                        protocol.knx_tunnel_disconnect()
+                        return
+                alive = yield from protocol.tpci_connect(target)
+                if alive:
+                    data = yield from protocol.apci_authenticate(
+                        target,
+                        key=auth_key)
+                    yield from protocol.tpci_disconnect(target)
+                    if isinstance(data, (type(None), type(False))):
+                        LOGGER.debug('No data received')
+                    else:
+                        LOGGER.info('Authorization level: {}'.format(data))
+            elif args.apci_type == 'GroupValue_Write':
+                if not hasattr(args, 'value') or args.value is None:
+                    LOGGER.error('Invalid parameters')
+                    protocol.knx_tunnel_disconnect()
+                    return
+                if isinstance(args.value, str):
+                    value = int(args.value)
+                yield from protocol.apci_group_value_write(target, value=value)
+
+
+            protocol.knx_tunnel_disconnect()

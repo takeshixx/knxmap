@@ -49,13 +49,13 @@ knxmap.py scan 192.168.1.100 192.168.1.110 192.168.2.0/24
 In addition to the discovery mode, KNXmap also supports to scan for devices on the KNX bus.
 
 ```
-knxmap.py scan 192.168.1.100 --bus-targets 1.1.5
+knxmap.py scan 192.168.1.100 1.1.5
 ```
 
 KNXmap also supports bus address ranges:
 
 ```
-knxmap.py scan 192.168.1.100 --bus-targets 1.0.0-1.1.255
+knxmap.py scan 192.168.1.100 1.0.0-1.1.255
 ```
 
 The default mode is to only check if sending messages to a address returns an error or not. This helps to identify potential devices and alive targets.
@@ -65,7 +65,7 @@ The default mode is to only check if sending messages to a address returns an er
 In addition to the default bus scanning KNXmap can also extract basic information from devices for further identification by supplying the `--bus-info` argument:
 
 ```
-knxmap.py scan 192.168.1.100 --bus-targets 1.1.5 --bus-info
+knxmap.py scan 192.168.1.100 1.1.5 --bus-info
 ```
 
 ### Search Mode
@@ -104,10 +104,26 @@ KNXmap allows one to write arbitrary values to any group address on the bus. The
 knxmap.py write 192.168.1.100 0/0/1 1
 ```
 
+## APCI Functions
+
+KNXmap provides wrappers for several APCI functions via the `apci` command. For example sending an `A_Authorize` message:
+
+```
+knxmap.py apci 192.168.0.10 1.1.1 Authorize --key 123
+```
+
+Sending the `A_Authorize` message will return the authorization level (0 is the highest, 15 the lowest). Some more examples:
+
+```
+knxmap.py apci 192.168.0.10 1.1.1 DeviceDescriptor_Read
+knxmap.py apci 192.168.0.10 1.1.1 PropertyValue_Read --property-id 0xb
+knxmap.py apci 192.168.0.10 1.1.1 Memory_Read --memory-address 0x0060
+```
+
 ## Hacking
 
 Enable full debugging and verbosity for development:
 
 ```
-PYTHONASYNCIODEBUG=1 knxmap.py -v scan 192.168.178.20 --bus-targets 1.1.0-1.1.6 --bus-info
+PYTHONASYNCIODEBUG=1 knxmap.py -v scan 192.168.178.20 1.1.0-1.1.6 --bus-info
 ```
