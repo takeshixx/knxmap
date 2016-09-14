@@ -53,7 +53,7 @@ pscan = SUBARGS.add_parser('scan', help='Scan KNXnet/IP gateways and attached bu
 pscan.add_argument(
     'targets', help='KNXnet/IP gateway', metavar='gateway')
 pscan.add_argument(
-    'bus_targets', action='store',
+    'bus_targets', action='store', nargs='?',
     default=None, help='Bus target range (e.g. 1.1.0-1.1.10)')
 pscan.add_argument(
     '--bus-info', action='store_true', dest='bus_info',
