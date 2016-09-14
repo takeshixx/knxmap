@@ -552,21 +552,88 @@ class KnxMap:
 
         if connected:
             if args.apci_type == 'Memory_Read':
-                # TODO: read device descriptor first to check if authorization is required
-                memory_address = args.memory_address
-                if not isinstance(memory_address, int):
-                    try:
-                        memory_address = int(memory_address, 16)
-                    except ValueError:
-                        LOGGER.error('Invalid property ID')
-                        protocol.knx_tunnel_disconnect()
-                        return
                 alive = yield from protocol.tpci_connect(target)
                 if alive:
+                    descriptor = yield from protocol.apci_device_descriptor_read(target)
+                    if not descriptor:
+                        LOGGER.debug('Device not alive')
+                        protocol.knx_tunnel_disconnect()
+                        return
+                    dev_desc = struct.unpack('!H', descriptor)[0]
+                    if dev_desc > 1:
+                        auth_key = args.auth_key
+                        if not isinstance(auth_key, int):
+                            try:
+                                auth_key = int(auth_key, 16)
+                            except ValueError:
+                                LOGGER.error('Invalid property ID')
+                                protocol.knx_tunnel_disconnect()
+                                return
+                        auth_level = yield from protocol.apci_authenticate(
+                            target,
+                            key=auth_key)
+                        if auth_level > 0:
+                            LOGGER.error('Invalid authentication key')
+                            protocol.knx_tunnel_disconnect()
+                            return
+                    memory_address = args.memory_address
+                    if not isinstance(memory_address, int):
+                        try:
+                            memory_address = int(memory_address, 16)
+                        except ValueError:
+                            LOGGER.error('Invalid property ID')
+                            protocol.knx_tunnel_disconnect()
+                            return
                     data = yield from protocol.apci_memory_read(
                         target,
                         memory_address=memory_address,
                         read_count=args.read_count)
+                    yield from protocol.tpci_disconnect(target)
+                    if not data:
+                        LOGGER.debug('No data received')
+                    else:
+                        LOGGER.info(codecs.encode(data, 'hex'))
+            elif args.apci_type == 'Memory_Write':
+                alive = yield from protocol.tpci_connect(target)
+                if alive:
+                    descriptor = yield from protocol.apci_device_descriptor_read(target)
+                    if not descriptor:
+                        LOGGER.debug('Device not alive')
+                        protocol.knx_tunnel_disconnect()
+                        return
+                    dev_desc = struct.unpack('!H', descriptor)[0]
+                    if dev_desc > 1:
+                        auth_key = args.auth_key
+                        if not isinstance(auth_key, int):
+                            try:
+                                auth_key = int(auth_key, 16)
+                            except ValueError:
+                                LOGGER.error('Invalid property ID')
+                                protocol.knx_tunnel_disconnect()
+                                return
+                        auth_level = yield from protocol.apci_authenticate(
+                            target,
+                            key=auth_key)
+                        if auth_level > 0:
+                            LOGGER.error('Invalid authentication key')
+                            protocol.knx_tunnel_disconnect()
+                            return
+                    memory_address = args.memory_address
+                    memory_data = args.memory_data
+                    if not isinstance(memory_address, int) or \
+                            not isinstance(memory_data, bytes):
+                        try:
+                            memory_address = int(memory_address, 16)
+                            memory_data = codecs.decode(memory_data, 'hex')
+                        except ValueError:
+                            LOGGER.error('Invalid property ID or write data')
+                            protocol.knx_tunnel_disconnect()
+                            return
+                    data = yield from protocol.apci_memory_write(
+                        target,
+                        memory_address=memory_address,
+                        write_count=args.read_count,
+                        data=memory_data)
                     yield from protocol.tpci_disconnect(target)
                     if not data:
                         LOGGER.debug('No data received')
@@ -622,6 +689,24 @@ class KnxMap:
                         LOGGER.debug('No data received')
                     else:
                         LOGGER.info('Authorization level: {}'.format(data))
+            elif args.apci_type == 'IndividualAddress_Read':
+                alive = yield from protocol.tpci_connect(target)
+                if alive:
+                    data = yield from protocol.apci_individual_address_read(target)
+                    yield from protocol.tpci_disconnect(target)
+                    if isinstance(data, (type(None), type(False))):
+                        LOGGER.debug('No data received')
+                    else:
+                        LOGGER.info('Individual address: {}'.format(data))
+            elif args.apci_type == 'UserManufacturerInfo_Read':
+                alive = yield from protocol.tpci_connect(target)
+                if alive:
+                    data = yield from protocol.apci_user_manufacturer_info_read(target)
+                    yield from protocol.tpci_disconnect(target)
+                    if isinstance(data, (type(None), type(False))):
+                        LOGGER.debug('No data received')
+                    else:
+                        LOGGER.info(codecs.encode(data, 'hex'))
             elif args.apci_type == 'GroupValue_Write':
                 if not hasattr(args, 'value') or args.value is None:
                     LOGGER.error('Invalid parameters')

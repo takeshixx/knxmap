@@ -653,6 +653,17 @@ class KnxMessage(object):
         self._pack_knx_body(cemi=cemi)
         self.pack_knx_message()
 
+    def apci_user_manufacturer_info_read(self, sequence=0):
+        """A_UserManufacturerInfo_Read"""
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 1)  # Data length
+        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
+        npdu |= sequence << 10
+        npdu |= CEMI_APCI_TYPES['A_UserManufacturerInfo_Read'] << 0
+        cemi += struct.pack('!H', npdu)
+        self._pack_knx_body(cemi=cemi)
+        self.pack_knx_message()
+
     def apci_adc_read(self, sequence=0):
         """A_ADC_Read"""
         cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
@@ -739,6 +750,21 @@ class KnxMessage(object):
         npdu |= read_count << 0  # number of octets to read/write
         cemi += struct.pack('!H', npdu)
         cemi += struct.pack('!H', memory_address)  # memory address
+        self._pack_knx_body(cemi=cemi)
+        self.pack_knx_message()
+
+    def apci_memory_write(self, sequence=0, memory_address=0x0060, write_count=1,
+                          data=b'\x00'):
+        """A_Memory_Write"""
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 3 + len(data))  # Data length
+        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
+        npdu |= sequence << 10
+        npdu |= CEMI_APCI_TYPES['A_Memory_Write'] << 4
+        npdu |= write_count << 0  # number of octets to read/write
+        cemi += struct.pack('!H', npdu)
+        cemi += struct.pack('!H', memory_address)  # memory address
+        cemi += struct.pack('!{}s'.format(len(data)), data)
         self._pack_knx_body(cemi=cemi)
         self.pack_knx_message()
 

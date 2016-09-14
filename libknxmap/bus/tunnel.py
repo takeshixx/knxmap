@@ -407,6 +407,23 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             return False
 
     @asyncio.coroutine
+    def apci_memory_write(self, target, memory_address=0x0060, write_count=1,
+                          data=b'\x00'):
+        tunnel_request = self.make_tunnel_request(target)
+        tunnel_request.apci_memory_write(
+            sequence=self.tpci_seq_counts.get(target),
+            memory_address=memory_address,
+            write_count=write_count,
+            data=data)
+        value = yield from self.send_data(tunnel_request.get_message(), target)
+        yield from self.tpci_send_ncd(target)
+        if isinstance(value, KnxTunnellingRequest) and \
+                value.body.get('cemi').get('data'):
+            return value.body.get('cemi').get('data')[2:]
+        else:
+            return False
+
+    @asyncio.coroutine
     def apci_authenticate(self, target, key=0xffffffff):
         """Send an A_Authorize_Request to target with the
         supplied key. Returns the access level as an int
@@ -427,6 +444,32 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         tunnel_request = self.make_tunnel_request(target)
         tunnel_request.apci_group_value_write(value=value)
         value = yield from self.send_data(tunnel_request.get_message(), target)
+        if isinstance(value, KnxTunnellingRequest) and \
+                value.body.get('cemi').get('data'):
+            return value.body.get('cemi').get('data')[4:]
+        else:
+            return False
+
+    @asyncio.coroutine
+    def apci_individual_address_read(self, target):
+        tunnel_request = self.make_tunnel_request(target)
+        tunnel_request.apci_individual_address_read(
+            sequence=self.tpci_seq_counts.get(target))
+        value = yield from self.send_data(tunnel_request.get_message(), target)
+        yield from self.tpci_send_ncd(target)
+        if isinstance(value, KnxTunnellingRequest) and \
+                value.body.get('cemi').get('data'):
+            return value.body.get('cemi').get('data')[4:]
+        else:
+            return False
+
+    @asyncio.coroutine
+    def apci_user_manufacturer_info_read(self, target):
+        tunnel_request = self.make_tunnel_request(target)
+        tunnel_request.apci_user_manufacturer_info_read(
+            sequence=self.tpci_seq_counts.get(target))
+        value = yield from self.send_data(tunnel_request.get_message(), target)
+        yield from self.tpci_send_ncd(target)
         if isinstance(value, KnxTunnellingRequest) and \
                 value.body.get('cemi').get('data'):
             return value.body.get('cemi').get('data')[4:]

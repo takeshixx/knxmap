@@ -93,23 +93,26 @@ papci.add_argument(
     '--memory-address', action='store', dest='memory_address',
     default=0x0060, help='Memory address')
 papci.add_argument(
-    '--read-count', action='store_true', dest='read_count',
+    '--read-count', action='store', dest='read_count', type=int,
     default=1, help='Number of bytes to read from memory')
 papci.add_argument(
     '--object-index', action='store', dest='object_index',
-    default=0, help='TBD')
+    type = int, default=0, help='TBD')
 papci.add_argument(
     '--property-id', action='store', dest='property_id',
     default=0x0f, help='TBD')
 papci.add_argument(
     '--elements', action='store', dest='num_elements',
-    default=1, help='TBD')
+    type=int, default=1, help='TBD')
 papci.add_argument(
     '--start-index', action='store', dest='start_index',
-    default=1, help='TBD')
+    type=int, default=1, help='TBD')
 papci.add_argument(
     '--key', action='store', dest='auth_key',
     default=0xffffffff, help='Authorize key for System 2 and System 7 devices')
+papci.add_argument(
+    '--memory-data', action='store', dest='memory_data',
+    default=0x00, help='Data to be written to memory address')
 
 pbrute = SUBARGS.add_parser('brute', help='Bruteforce authentication key')
 pbrute.add_argument(
