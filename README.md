@@ -118,6 +118,8 @@ Sending the `A_Authorize` message will return the authorization level (0 is the 
 knxmap.py apci 192.168.0.10 1.1.1 DeviceDescriptor_Read
 knxmap.py apci 192.168.0.10 1.1.1 PropertyValue_Read --property-id 0xb
 knxmap.py apci 192.168.0.10 1.1.1 Memory_Read --memory-address 0x0060
+knxmap.py apci 192.168.0.10 1.1.3 Key_Write --key 0xffffffff --new-key 0x11111111
+knxmap.py apci 192.168.0.10 1.1.3 Restart
 ```
 
 ## Hacking
