@@ -41,7 +41,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         self.transport.sendto(connect_request.get_message())
         # Schedule CONNECTIONSTATE_REQUEST to keep the connection alive
         self.loop.call_later(50, self.knx_keep_alive)
-        self.loop.call_later(4, self.poll_response_queue)
+        self.loop.call_later(1, self.poll_response_queue)
 
     def poll_response_queue(self):
         """Check if there if there is a KNX message for a
