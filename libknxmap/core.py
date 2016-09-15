@@ -748,6 +748,11 @@ class KnxMap:
                         LOGGER.debug('No data received')
                     else:
                         LOGGER.info(codecs.encode(data, 'hex'))
+            elif args.apci_type == 'Restart':
+                alive = yield from protocol.tpci_connect(target)
+                if alive:
+                    yield from protocol.apci_restart(target)
+                    yield from protocol.tpci_disconnect(target)
             elif args.apci_type == 'GroupValue_Write':
                 if not hasattr(args, 'value') or args.value is None:
                     LOGGER.error('Invalid parameters')

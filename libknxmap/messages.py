@@ -792,6 +792,17 @@ class KnxMessage(object):
         self._pack_knx_body(cemi=cemi)
         self.pack_knx_message()
 
+    def apci_restart(self, sequence=0):
+        """A_Restart"""
+        cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
+        cemi += struct.pack('!B', 1)  # Data length
+        npdu = CEMI_TPCI_TYPES.get('NDP') << 14
+        npdu |= sequence << 10
+        npdu |= CEMI_APCI_TYPES['A_Restart'] << 0
+        cemi += struct.pack('!H', npdu)
+        self._pack_knx_body(cemi=cemi)
+        self.pack_knx_message()
+
 
 class KnxSearchRequest(KnxMessage):
     def __init__(self, message=None, sockname=None):

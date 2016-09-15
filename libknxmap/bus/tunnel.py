@@ -188,7 +188,9 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                     # check if L_Data.ind arrives.
                     if cemi_apci_type in [CEMI_APCI_TYPES.get('A_DeviceDescriptor_Read'),
                                           CEMI_APCI_TYPES.get('A_PropertyValue_Read')]:
-                        self.loop.call_later(3, self.process_target, knx_dst, False, knx_msg)
+                        self.loop.call_later(.5, self.process_target, knx_dst, False, knx_msg)
+                    elif cemi_apci_type == CEMI_APCI_TYPES.get('A_Restart'):
+                        self.process_target(knx_dst, True, knx_msg)
 
                 elif cemi_tpci_type == CEMI_TPCI_TYPES.get('UDP'):
                     # After e.g. an A_GroupValue_Write we just get a
@@ -487,5 +489,16 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         if isinstance(value, KnxTunnellingRequest) and \
                 value.body.get('cemi').get('data'):
             return value.body.get('cemi').get('data')[4:]
+        else:
+            return False
+
+    @asyncio.coroutine
+    def apci_restart(self, target):
+        tunnel_request = self.make_tunnel_request(target)
+        tunnel_request.apci_restart(
+            sequence=self.tpci_seq_counts.get(target))
+        value = yield from self.send_data(tunnel_request.get_message(), target)
+        if isinstance(value, KnxTunnellingRequest):
+            return True
         else:
             return False
