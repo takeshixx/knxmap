@@ -639,6 +639,47 @@ class KnxMap:
                         LOGGER.debug('No data received')
                     else:
                         LOGGER.info(codecs.encode(data, 'hex'))
+            elif args.apci_type == 'Key_Write':
+                alive = yield from protocol.tpci_connect(target)
+                if alive:
+                    descriptor = yield from protocol.apci_device_descriptor_read(target)
+                    if not descriptor:
+                        LOGGER.debug('Device not alive')
+                        protocol.knx_tunnel_disconnect()
+                        return
+                    dev_desc = struct.unpack('!H', descriptor)[0]
+                    if dev_desc > 1:
+                        auth_key = args.auth_key
+                        if not isinstance(auth_key, int):
+                            try:
+                                auth_key = int(auth_key, 16)
+                            except ValueError:
+                                LOGGER.error('Invalid property ID')
+                                protocol.knx_tunnel_disconnect()
+                                return
+                        auth_level = yield from protocol.apci_authenticate(
+                            target,
+                            key=auth_key)
+                        if auth_level > 0:
+                            LOGGER.error('Invalid authentication key')
+                            protocol.knx_tunnel_disconnect()
+                            return
+                    new_auth_key = args.new_auth_key
+                    if not isinstance(new_auth_key, int):
+                        try:
+                            new_auth_key = int(new_auth_key, 16)
+                        except ValueError:
+                            LOGGER.error('Invalid property ID')
+                            protocol.knx_tunnel_disconnect()
+                            return
+                    data = yield from protocol.apci_key_write(
+                        target,
+                        key=new_auth_key)
+                    yield from protocol.tpci_disconnect(target)
+                    if not data:
+                        LOGGER.debug('No data received')
+                    else:
+                        LOGGER.info('Authorization level: {}'.format(data))
             elif args.apci_type == 'PropertyValue_Read':
                 property_id = args.property_id
                 if not isinstance(property_id, int):

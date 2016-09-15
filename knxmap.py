@@ -111,6 +111,9 @@ papci.add_argument(
     '--key', action='store', dest='auth_key',
     default=0xffffffff, help='Authorize key for System 2 and System 7 devices')
 papci.add_argument(
+    '--new-key', action='store', dest='new_auth_key',
+    default=0xffffffff, help='Set new authorization key')
+papci.add_argument(
     '--memory-data', action='store', dest='memory_data',
     default=0x00, help='Data to be written to memory address')
 
