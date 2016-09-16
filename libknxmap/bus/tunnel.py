@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import struct
 
 from libknxmap.data.constants import *
 from libknxmap.messages import *
@@ -344,6 +345,22 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         tunnel_request = self.make_tunnel_request(target)
         tunnel_request.tpci_unnumbered_control_data('DISCONNECT')
         self.transport.sendto(tunnel_request.get_message())
+
+    @asyncio.coroutine
+    def get_device_type(self, target):
+        """A helper function that just returns the device type
+        returned by A_DeviceDescriptor_Read as an integer. This
+        can be used e.g. to determine whether a type requires
+        authorization (System 2/System7) or not (System 1)."""
+        descriptor = yield from self.apci_device_descriptor_read(target)
+        if not descriptor:
+            return False
+        try:
+            dev_desc = struct.unpack('!H', descriptor)[0]
+        except (struct.error, TypeError):
+            return False
+        _, desc_type, _ = KnxMessage.parse_device_descriptor(dev_desc)
+        return desc_type
 
     @asyncio.coroutine
     def apci_device_descriptor_read(self, target):
