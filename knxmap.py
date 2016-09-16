@@ -114,6 +114,9 @@ papci.add_argument(
     '--new-key', action='store', dest='new_auth_key',
     default=0xffffffff, help='Set new authorization key')
 papci.add_argument(
+    '--key-level', action='store', dest='auth_level', type=int,
+    default=0, help='Authorization level for A_Key_Write')
+papci.add_argument(
     '--memory-data', action='store', dest='memory_data',
     default=0x00, help='Data to be written to memory address')
 

@@ -768,7 +768,7 @@ class KnxMessage(object):
         self._pack_knx_body(cemi=cemi)
         self.pack_knx_message()
 
-    def apci_key_write(self, sequence=0, key=0xffffffff):
+    def apci_key_write(self, sequence=0, level=0, key=0xffffffff):
         """A_Key_Write"""
         cemi = self._pack_cemi(message_code=CEMI_MSG_CODES.get('L_Data.req'))
         cemi += struct.pack('!B', 6)  # Data length
@@ -776,7 +776,7 @@ class KnxMessage(object):
         npdu |= sequence << 10
         npdu |= CEMI_APCI_TYPES['A_Key_Write'] << 0
         cemi += struct.pack('!H', npdu)
-        cemi += struct.pack('!B', 0x00)  # reserved
+        cemi += struct.pack('!B', level)
         cemi += struct.pack('!I', key)
         self._pack_knx_body(cemi=cemi)
         self.pack_knx_message()

@@ -426,10 +426,11 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             return False
 
     @asyncio.coroutine
-    def apci_key_write(self, target, key):
+    def apci_key_write(self, target, level, key):
         tunnel_request = self.make_tunnel_request(target)
         tunnel_request.apci_key_write(
             sequence=self.tpci_seq_counts.get(target),
+            level=level,
             key=key)
         value = yield from self.send_data(tunnel_request.get_message(), target)
         yield from self.tpci_send_ncd(target)

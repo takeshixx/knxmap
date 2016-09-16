@@ -674,6 +674,7 @@ class KnxMap:
                             return
                     data = yield from protocol.apci_key_write(
                         target,
+                        level=args.auth_level,
                         key=new_auth_key)
                     yield from protocol.tpci_disconnect(target)
                     if not data:
