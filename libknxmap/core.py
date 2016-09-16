@@ -573,6 +573,7 @@ class KnxMap:
                             except ValueError:
                                 LOGGER.error('Invalid property ID')
                                 protocol.knx_tunnel_disconnect()
+                                protocol.tpci_disconnect(target)
                                 return
                         auth_level = yield from protocol.apci_authenticate(
                             target,
@@ -580,6 +581,7 @@ class KnxMap:
                         if auth_level > 0:
                             LOGGER.error('Invalid authentication key')
                             protocol.knx_tunnel_disconnect()
+                            protocol.tpci_disconnect(target)
                             return
                     memory_address = args.memory_address
                     if not isinstance(memory_address, int):
@@ -588,12 +590,13 @@ class KnxMap:
                         except ValueError:
                             LOGGER.error('Invalid property ID')
                             protocol.knx_tunnel_disconnect()
+                            protocol.tpci_disconnect(target)
                             return
                     data = yield from protocol.apci_memory_read(
                         target,
                         memory_address=memory_address,
                         read_count=args.read_count)
-                    yield from protocol.tpci_disconnect(target)
+                    protocol.tpci_disconnect(target)
                     if not data:
                         LOGGER.debug('No data received')
                     else:
@@ -614,6 +617,7 @@ class KnxMap:
                             except ValueError:
                                 LOGGER.error('Invalid property ID')
                                 protocol.knx_tunnel_disconnect()
+                                protocol.tpci_disconnect(target)
                                 return
                         auth_level = yield from protocol.apci_authenticate(
                             target,
@@ -621,6 +625,7 @@ class KnxMap:
                         if auth_level > 0:
                             LOGGER.error('Invalid authentication key')
                             protocol.knx_tunnel_disconnect()
+                            protocol.tpci_disconnect(target)
                             return
                     memory_address = args.memory_address
                     memory_data = args.memory_data
@@ -632,13 +637,14 @@ class KnxMap:
                         except ValueError:
                             LOGGER.error('Invalid property ID or write data')
                             protocol.knx_tunnel_disconnect()
+                            protocol.tpci_disconnect(target)
                             return
                     data = yield from protocol.apci_memory_write(
                         target,
                         memory_address=memory_address,
                         write_count=args.read_count,
                         data=memory_data)
-                    yield from protocol.tpci_disconnect(target)
+                    protocol.tpci_disconnect(target)
                     if not data:
                         LOGGER.debug('No data received')
                     else:
@@ -659,6 +665,7 @@ class KnxMap:
                             except ValueError:
                                 LOGGER.error('Invalid property ID')
                                 protocol.knx_tunnel_disconnect()
+                                protocol.tpci_disconnect(target)
                                 return
                         auth_level = yield from protocol.apci_authenticate(
                             target,
@@ -666,6 +673,7 @@ class KnxMap:
                         if auth_level > 0:
                             LOGGER.error('Invalid authentication key')
                             protocol.knx_tunnel_disconnect()
+                            protocol.tpci_disconnect(target)
                             return
                     new_auth_key = args.new_auth_key
                     if not isinstance(new_auth_key, int):
@@ -674,12 +682,13 @@ class KnxMap:
                         except ValueError:
                             LOGGER.error('Invalid property ID')
                             protocol.knx_tunnel_disconnect()
+                            protocol.tpci_disconnect(target)
                             return
                     data = yield from protocol.apci_key_write(
                         target,
                         level=args.auth_level,
                         key=new_auth_key)
-                    yield from protocol.tpci_disconnect(target)
+                    protocol.tpci_disconnect(target)
                     if not data:
                         LOGGER.debug('No data received')
                     else:
@@ -692,6 +701,7 @@ class KnxMap:
                     except ValueError:
                         LOGGER.error('Invalid property ID')
                         protocol.knx_tunnel_disconnect()
+                        protocol.tpci_disconnect(target)
                         return
                 alive = yield from protocol.tpci_connect(target)
                 if alive:
@@ -701,7 +711,7 @@ class KnxMap:
                         property_id=property_id,
                         num_elements=args.num_elements,
                         start_index=args.start_index)
-                    yield from protocol.tpci_disconnect(target)
+                    protocol.tpci_disconnect(target)
                     if not data:
                         LOGGER.debug('No data received')
                     else:
@@ -710,7 +720,7 @@ class KnxMap:
                 alive = yield from protocol.tpci_connect(target)
                 if alive:
                     data = yield from protocol.apci_device_descriptor_read(target)
-                    yield from protocol.tpci_disconnect(target)
+                    protocol.tpci_disconnect(target)
                     if not data:
                         LOGGER.debug('No data received')
                     else:
@@ -723,13 +733,14 @@ class KnxMap:
                     except ValueError:
                         LOGGER.error('Invalid property ID')
                         protocol.knx_tunnel_disconnect()
+                        protocol.tpci_disconnect(target)
                         return
                 alive = yield from protocol.tpci_connect(target)
                 if alive:
                     data = yield from protocol.apci_authenticate(
                         target,
                         key=auth_key)
-                    yield from protocol.tpci_disconnect(target)
+                    protocol.tpci_disconnect(target)
                     if isinstance(data, (type(None), type(False))):
                         LOGGER.debug('No data received')
                     else:
@@ -738,7 +749,7 @@ class KnxMap:
                 alive = yield from protocol.tpci_connect(target)
                 if alive:
                     data = yield from protocol.apci_individual_address_read(target)
-                    yield from protocol.tpci_disconnect(target)
+                    protocol.tpci_disconnect(target)
                     if isinstance(data, (type(None), type(False))):
                         LOGGER.debug('No data received')
                     else:
@@ -747,7 +758,7 @@ class KnxMap:
                 alive = yield from protocol.tpci_connect(target)
                 if alive:
                     data = yield from protocol.apci_user_manufacturer_info_read(target)
-                    yield from protocol.tpci_disconnect(target)
+                    protocol.tpci_disconnect(target)
                     if isinstance(data, (type(None), type(False))):
                         LOGGER.debug('No data received')
                     else:
@@ -765,6 +776,5 @@ class KnxMap:
                 if isinstance(args.value, str):
                     value = int(args.value)
                 yield from protocol.apci_group_value_write(target, value=value)
-
 
             protocol.knx_tunnel_disconnect()
