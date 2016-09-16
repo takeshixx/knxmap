@@ -560,13 +560,12 @@ class KnxMap:
             if args.apci_type == 'Memory_Read':
                 alive = yield from protocol.tpci_connect(target)
                 if alive:
-                    descriptor = yield from protocol.apci_device_descriptor_read(target)
-                    if not descriptor:
-                        LOGGER.debug('Device not alive')
+                    dev_type = yield from protocol.get_device_type(target)
+                    if not dev_type:
                         protocol.knx_tunnel_disconnect()
+                        protocol.tpci_disconnect(target)
                         return
-                    dev_desc = struct.unpack('!H', descriptor)[0]
-                    if dev_desc > 1:
+                    if dev_type > 1 and not args.ignore_auth:
                         auth_key = args.auth_key
                         if not isinstance(auth_key, int):
                             try:
@@ -602,13 +601,12 @@ class KnxMap:
             elif args.apci_type == 'Memory_Write':
                 alive = yield from protocol.tpci_connect(target)
                 if alive:
-                    descriptor = yield from protocol.apci_device_descriptor_read(target)
-                    if not descriptor:
-                        LOGGER.debug('Device not alive')
+                    dev_type = yield from protocol.get_device_type(target)
+                    if not dev_type:
                         protocol.knx_tunnel_disconnect()
+                        protocol.tpci_disconnect(target)
                         return
-                    dev_desc = struct.unpack('!H', descriptor)[0]
-                    if dev_desc > 1:
+                    if dev_type > 1:
                         auth_key = args.auth_key
                         if not isinstance(auth_key, int):
                             try:
@@ -648,13 +646,12 @@ class KnxMap:
             elif args.apci_type == 'Key_Write':
                 alive = yield from protocol.tpci_connect(target)
                 if alive:
-                    descriptor = yield from protocol.apci_device_descriptor_read(target)
-                    if not descriptor:
-                        LOGGER.debug('Device not alive')
+                    dev_type = yield from protocol.get_device_type(target)
+                    if not dev_type:
                         protocol.knx_tunnel_disconnect()
+                        protocol.tpci_disconnect(target)
                         return
-                    dev_desc = struct.unpack('!H', descriptor)[0]
-                    if dev_desc > 1:
+                    if dev_type > 1:
                         auth_key = args.auth_key
                         if not isinstance(auth_key, int):
                             try:
