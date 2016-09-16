@@ -192,8 +192,10 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                     # check if L_Data.ind arrives.
                     if cemi_apci_type in [CEMI_APCI_TYPES.get('A_DeviceDescriptor_Read'),
                                           CEMI_APCI_TYPES.get('A_PropertyValue_Read')]:
-                        self.loop.call_later(.5, self.process_target, knx_dst, False, knx_msg)
-                    elif cemi_apci_type == CEMI_APCI_TYPES.get('A_Restart'):
+                        self.loop.call_later(
+                            self.ndp_defer_time, self.process_target, knx_dst, False, knx_msg)
+                    elif cemi_apci_type in [CEMI_APCI_TYPES.get('A_Restart'),
+                                            CEMI_APCI_TYPES.get('A_Memory_Write')]:
                         self.process_target(knx_dst, True, knx_msg)
 
                 elif cemi_tpci_type == CEMI_TPCI_TYPES.get('UDP'):
