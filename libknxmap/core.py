@@ -767,7 +767,75 @@ class KnxMap:
                 alive = yield from protocol.tpci_connect(target)
                 if alive:
                     yield from protocol.apci_restart(target)
-                    yield from protocol.tpci_disconnect(target)
+                    protocol.tpci_disconnect(target)
+            elif args.apci_type == 'Progmode':
+                alive = yield from protocol.tpci_connect(target)
+                if alive:
+                    dev_type = yield from protocol.get_device_type(target)
+                    if not dev_type:
+                        protocol.knx_tunnel_disconnect()
+                        protocol.tpci_disconnect(target)
+                        return
+                    if dev_type > 1:
+                        auth_key = args.auth_key
+                        if not isinstance(auth_key, int):
+                            try:
+                                auth_key = int(auth_key, 16)
+                            except ValueError:
+                                LOGGER.error('Invalid property ID')
+                                protocol.knx_tunnel_disconnect()
+                                protocol.tpci_disconnect(target)
+                                return
+                        auth_level = yield from protocol.apci_authenticate(
+                            target,
+                            key=auth_key)
+                        if auth_level > 0:
+                            LOGGER.error('Invalid authentication key')
+                            protocol.knx_tunnel_disconnect()
+                            protocol.tpci_disconnect(target)
+                            return
+                    data = yield from protocol.apci_memory_read(
+                        target,
+                        memory_address=0x0060,
+                        read_count=args.read_count)
+                    if not data:
+                        LOGGER.debug('No data received')
+                    else:
+                        data = int.from_bytes(data, 'big')
+                        run_state = KnxMessage.unpack_cemi_runstate(data)
+                        if args.toggle:
+                            if run_state.get('PROG_MODE'):
+                                run_state = KnxMessage.pack_cemi_runstate(
+                                    prog_mode=False,
+                                    link_layer_active=run_state.get('LINK_LAYER'),
+                                    transport_layer_active=run_state.get('TRANSPORT_LAYER'),
+                                    app_layer_active=run_state.get('APP_LAYER'),
+                                    serial_interface_active=run_state.get('SERIAL_INTERFACE'),
+                                    user_app_run=run_state.get('USER_APP'),
+                                    bcu_download_mode=run_state.get('BC_DM'))
+                            else:
+                                run_state = KnxMessage.pack_cemi_runstate(
+                                    prog_mode=True,
+                                    link_layer_active=run_state.get('LINK_LAYER'),
+                                    transport_layer_active=run_state.get('TRANSPORT_LAYER'),
+                                    app_layer_active=run_state.get('APP_LAYER'),
+                                    serial_interface_active=run_state.get('SERIAL_INTERFACE'),
+                                    user_app_run=run_state.get('USER_APP'),
+                                    bcu_download_mode=run_state.get('BC_DM'))
+                            data = yield from protocol.apci_memory_write(
+                                target,
+                                memory_address=0x0060,
+                                data=struct.pack('!B', run_state))
+                            if not data:
+                                LOGGER.debug('No data received')
+                            else:
+                                LOGGER.info(codecs.encode(data, 'hex'))
+                        else:
+                            if run_state.get('PROG_MODE'):
+                                LOGGER.info('Programming mode ENABLED')
+                            else:
+                                LOGGER.info('Programming mode disabled')
+                    protocol.tpci_disconnect(target)
             elif args.apci_type == 'GroupValue_Write':
                 if not hasattr(args, 'value') or args.value is None:
                     LOGGER.error('Invalid parameters')

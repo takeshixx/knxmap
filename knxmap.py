@@ -125,6 +125,12 @@ papci.add_argument(
 papci.add_argument(
     '--memory-data', action='store', dest='memory_data',
     default=0x00, help='Data to be written to memory address')
+papci.add_argument(
+    '--toggle', action='store_true', dest='toggle',
+    default=False, help='Toggle something (e.g. progmode)')
+papci.add_argument(
+    '--ignore-auth', action='store_true', dest='ignore_auth',
+    default=False, help='Ignore authorization')
 
 pbrute = SUBARGS.add_parser('brute', help='Bruteforce authentication key')
 pbrute.add_argument(
