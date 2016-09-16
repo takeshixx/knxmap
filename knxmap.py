@@ -48,6 +48,9 @@ ARGS.add_argument(
 ARGS.add_argument(
     '--retries', action='store', dest='retries', type=int,
     default=3, help='Count of retries for description requests')
+ARGS.add_argument(
+    '--knx-source-address', action='store', dest='knx_source',
+    default=None, help='KNX source address used for messages to bus devices')
 
 pscan = SUBARGS.add_parser('scan', help='Scan KNXnet/IP gateways and attached bus devices')
 pscan.add_argument(
@@ -61,6 +64,9 @@ pscan.add_argument(
 pscan.add_argument(
     '--key', action='store', dest='auth_key',
     default=0xffffffff, help='Authorize key for System 2 and System 7 devices')
+pscan.add_argument(
+    '--bus-timeout', action='store', dest='bus_timeout', type=int,
+    default=2, help='Waiting time for deferred NDP messages')
 
 psearch = SUBARGS.add_parser('search',
                              help='Search for KNXnet/IP gateways on the local network')
@@ -185,8 +191,10 @@ def main():
             loop.run_until_complete(knxmap.scan(
                 desc_timeout=args.timeout,
                 desc_retries=args.retries,
+                bus_timeout=args.bus_timeout,
                 bus_targets=bus_targets.targets,
                 bus_info=args.bus_info,
+                knx_source=args.knx_source,
                 auth_key=args.auth_key))
     except KeyboardInterrupt:
         for t in asyncio.Task.all_tasks():

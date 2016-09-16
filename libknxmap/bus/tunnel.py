@@ -11,7 +11,8 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
     """Communicate with bus devices via a KNX gateway using TunnellingRequests. A tunneling
     connection is always used if the bus destination is a physical KNX address."""
 
-    def __init__(self, future, connection_type=0x04, layer_type='TUNNEL_LINKLAYER', loop=None):
+    def __init__(self, future, connection_type=0x04, layer_type='TUNNEL_LINKLAYER',
+                 ndp_defer_time=2, knx_source=None, loop=None):
         self.future = future
         self.connection_type = connection_type
         self.layer_type = layer_type
@@ -22,8 +23,9 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         self.communication_channel = None
         self.sequence_count = 0  # sequence counter in KNX body
         self.tpci_seq_counts = dict()  # NCD/NPD counter for each TPCI connection
-        self.knx_source_address = None  # TODO: is the actual address needed? or just 0.0.0?
+        self.knx_source_address = knx_source
         self.response_queue = list()
+        self.ndp_defer_time = ndp_defer_time
 
     def connection_made(self, transport):
         """The connection setup function that takes care of:
@@ -114,7 +116,8 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                 if not self.tunnel_established:
                     self.tunnel_established = True
                 self.communication_channel = knx_msg.body.get('communication_channel_id')
-                self.knx_source_address = knx_msg.body.get('data_block').get('knx_address')
+                if not self.knx_source_address:
+                    self.knx_source_address = knx_msg.body.get('data_block').get('knx_address')
                 self.future.set_result(True)
             else:
                 LOGGER.error(knx_msg.ERROR)

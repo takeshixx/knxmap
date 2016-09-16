@@ -266,7 +266,11 @@ class KnxMap:
         LOGGER.info('Scanning {} bus device(s) on {}'.format(queue.qsize(), knx_gateway.host))
         future = asyncio.Future()
         transport, bus_protocol = yield from self.loop.create_datagram_endpoint(
-            functools.partial(KnxTunnelConnection, future),
+            functools.partial(
+                KnxTunnelConnection,
+                future,
+                ndp_defer_time=self.bus_timeout,
+                knx_source=self.knx_source),
             remote_addr=(knx_gateway.host, knx_gateway.port))
         self.bus_protocols.append(bus_protocol)
 
@@ -418,8 +422,8 @@ class KnxMap:
         yield from asyncio.wait(tasks)
 
     @asyncio.coroutine
-    def scan(self, targets=None, desc_timeout=2, desc_retries=2,
-             bus_targets=None, bus_info=False, auth_key=0xffffffff):
+    def scan(self, targets=None, desc_timeout=2, desc_retries=2, bus_timeout=2,
+             bus_targets=None, bus_info=False, knx_source=None, auth_key=0xffffffff):
         """The function that will be called by run_until_complete(). This is the main coroutine."""
         self.auth_key = auth_key
         if targets:
@@ -427,6 +431,8 @@ class KnxMap:
 
         self.desc_timeout = desc_timeout
         self.desc_retries = desc_retries
+        self.bus_timeout = bus_timeout
+        self.knx_source = knx_source
         workers = [asyncio.Task(self.knx_description_worker(), loop=self.loop)
                    for _ in range(self.max_workers if len(self.targets) > self.max_workers else len(self.targets))]
         self.t0 = time.time()
