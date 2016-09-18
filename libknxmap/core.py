@@ -151,19 +151,6 @@ class KnxMap:
                         if isinstance(serial, (str, bytes)):
                             serial = codecs.encode(serial, 'hex').decode().upper()
 
-                        # DEV - group value write
-                        # r = yield from protocol.apci_group_value_write('0.0.4', value=1)
-                        # r = yield from protocol.apci_group_value_write('0.0.4', value=0)
-                        # r = yield from protocol.apci_group_value_write('0.0.4', value=1)
-                        # r = yield from protocol.apci_group_value_write('0.0.4', value=0)
-                        # r = yield from protocol.apci_group_value_write('0.0.4', value=1)
-                        # r = yield from protocol.apci_group_value_write('0.0.4', value=0)
-
-                        # If we want to authenticate
-                        # auth_level = yield from protocol.apci_authenticate(
-                        #     target,
-                        #     key=self.auth_key)
-
                         for object_index, props in OBJECTS.items():
                             x = collections.OrderedDict()
                             for k, v in props.items():
