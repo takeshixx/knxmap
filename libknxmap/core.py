@@ -514,6 +514,7 @@ class KnxMap:
         self.desc_timeout = desc_timeout
         self.desc_retries = desc_retries
         self.iface = iface
+        self.knx_source = args.knx_source
         workers = [asyncio.Task(self.knx_description_worker(), loop=self.loop)
                    for _ in range(self.max_workers if len(self.targets) > self.max_workers else len(self.targets))]
         self.t0 = time.time()
@@ -536,7 +537,7 @@ class KnxMap:
 
         future = asyncio.Future()
         transport, protocol = yield from self.loop.create_datagram_endpoint(
-            functools.partial(KnxTunnelConnection, future),
+            functools.partial(KnxTunnelConnection, future, knx_source=self.knx_source),
             remote_addr=(knx_gateway.host, knx_gateway.port))
         self.bus_protocols.append(protocol)
 
