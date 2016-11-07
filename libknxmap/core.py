@@ -68,7 +68,7 @@ class KnxMap:
         return self.bus_queues[gateway]
 
     @asyncio.coroutine
-    def bruteforce_auth_key(self, knx_gateway, target):
+    def bruteforce_auth_key(self, knx_gateway, target, full_key_space=False):
         if isinstance(target, set):
             target = list(target)[0]
         future = asyncio.Future()
@@ -76,17 +76,18 @@ class KnxMap:
             functools.partial(KnxTunnelConnection, future),
             remote_addr=(knx_gateway[0], knx_gateway[1]))
         self.bus_protocols.append(protocol)
-
         # Make sure the tunnel has been established
         connected = yield from future
         alive = yield from protocol.tpci_connect(target)
-
+        if full_key_space:
+            key_space = range(0, 0xffffffff)
+        else:
+            key_space = [0x11223344, 0x12345678, 0x00000000, 0x87654321, 0x11111111, 0xffffffff]
         # Bruteforce the key via A_Authorize_Request messages
-        # for key in range(0, 0xffffffff):
-        for key in [0x11223344, 0x12345678, 0x00000000, 0x87654321, 0x11111111, 0xffffffff]:
+        for key in key_space:
             access_level = yield from protocol.apci_authenticate(target, key)
             if access_level == 0:
-                print("GOT THE KEY: {}".format(format(key, '08x')))
+                LOGGER.info("GOT THE KEY: {}".format(format(key, '08x')))
                 break
 
     @asyncio.coroutine
@@ -263,7 +264,6 @@ class KnxMap:
 
         # Make sure the tunnel has been established
         connected = yield from future
-
         if connected:
             workers = [asyncio.Task(self.knx_bus_worker(transport, bus_protocol, queue), loop=self.loop)]
             self.t0 = time.time()
@@ -402,10 +402,11 @@ class KnxMap:
         LOGGER.info('Searching done')
 
     @asyncio.coroutine
-    def brute(self, targets=None, bus_target=None):
+    def brute(self, targets=None, bus_target=None, full_key_space=False):
         if targets:
             self.set_targets(targets)
-        tasks = [asyncio.Task(self.bruteforce_auth_key(t, bus_target), loop=self.loop) for t in self.targets]
+        tasks = [asyncio.Task(self.bruteforce_auth_key(t, bus_target, full_key_space),
+                              loop=self.loop) for t in self.targets]
         yield from asyncio.wait(tasks)
 
     @asyncio.coroutine

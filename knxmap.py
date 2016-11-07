@@ -137,6 +137,9 @@ pbrute.add_argument(
     'targets', help='KNXnet/IP gateway', metavar='gateway')
 pbrute.add_argument(
     'bus_target', help='Individual address of bus device')
+pbrute.add_argument(
+    '--full-key-space', action='store_true', dest='full_key_space',
+    default=False, help='Bruteforce the full key space (0 - 0xffffffff)')
 
 pmonitor = SUBARGS.add_parser('monitor', help='Monitor bus and group messages')
 pmonitor.add_argument(
@@ -189,8 +192,10 @@ def main():
             loop.run_until_complete(knxmap.monitor(
                 group_monitor_mode=args.group_monitor_mode))
         elif args.cmd == 'brute':
+            bus_target = KnxTargets(args.bus_target)
             loop.run_until_complete(knxmap.brute(
-                bus_target=KnxTargets(args.bus_target)))
+                bus_target=bus_target.targets,
+                full_key_space=args.full_key_space))
         elif args.cmd == 'scan':
             LOGGER.info('Scanning {} target(s)'.format(len(targets.targets)))
             bus_targets = KnxTargets(args.bus_targets)
