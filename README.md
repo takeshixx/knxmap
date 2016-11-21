@@ -22,5 +22,5 @@ The documentation is available in the [repository wiki](https://github.com/ernw/
 Enable full debugging and verbosity for development:
 
 ```
-PYTHONASYNCIODEBUG=1 knxmap.py -v scan 192.168.178.20 1.1.0-1.1.6 --bus-info
+PYTHONASYNCIODEBUG=1 knxmap -v scan 192.168.178.20 1.1.0-1.1.6 --bus-info
 ```
