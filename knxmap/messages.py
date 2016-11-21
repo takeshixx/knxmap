@@ -5,7 +5,7 @@ import logging
 import socket
 import struct
 
-from libknxmap.data.constants import *
+from knxmap.data.constants import *
 
 __all__ = ['parse_message',
            'KnxMessage',

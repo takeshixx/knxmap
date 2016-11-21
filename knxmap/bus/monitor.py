@@ -1,9 +1,9 @@
 import asyncio
 import logging
 
-from libknxmap.bus.tunnel import KnxTunnelConnection
-from libknxmap.data.constants import *
-from libknxmap.messages import *
+from knxmap.bus.tunnel import KnxTunnelConnection
+from knxmap.data.constants import *
+from knxmap.messages import *
 
 LOGGER = logging.getLogger(__name__)
 

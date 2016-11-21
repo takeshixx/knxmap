@@ -2,8 +2,8 @@ import asyncio
 import logging
 import struct
 
-from libknxmap.data.constants import *
-from libknxmap.messages import *
+from knxmap.data.constants import *
+from knxmap.messages import *
 
 LOGGER = logging.getLogger(__name__)
 

@@ -1,5 +1,5 @@
 import sys
-from distutils.core import setup
+from setuptools import setup
 
 install_require = []
 
@@ -15,9 +15,12 @@ elif sys.version_info.major > 2 and \
     install_require.append('asyncio')
 
 setup(name='KNXmap',
-      version='v0.9.0',
-      packages=['libknxmap'],
-      scripts=['knxmap.py'],
+      version='0.9.1',
+      packages=['knxmap',
+                'knxmap.bus',
+                'knxmap.data'],
+      entry_points={
+          'console_scripts': ['knxmap=knxmap.main:main']},
       install_requires=install_require,
       url='https://github.com/ernw/knxmap',
       license='GNU GPLv3',

@@ -2,8 +2,8 @@
 import asyncio
 import logging
 
-from libknxmap.data.constants import *
-from libknxmap.messages import *
+from knxmap.data.constants import *
+from knxmap.messages import *
 
 __all__ = ['KnxGatewaySearch',
            'KnxGatewayDescription']

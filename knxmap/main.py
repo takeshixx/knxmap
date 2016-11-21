@@ -4,7 +4,7 @@ import os
 import argparse
 import logging
 
-from libknxmap import KnxMap, Targets, KnxTargets
+from knxmap import KnxMap, Targets, KnxTargets
 
 # asyncio requires at least Python 3.3
 if sys.version_info.major < 3 or \
