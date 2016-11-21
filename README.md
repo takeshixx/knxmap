@@ -4,16 +4,13 @@ A tool for scanning and auditing KNXnet/IP gateways on IP driven networks. KNXne
 
 ## Compatibility
 
-KNXmap requires Python 3.3 or newer. There are no external dependencies, everything is included in the standard library.
-
-*Note*: Users of Python 3.3 need to install the [asyncio](https://docs.python.org/3/library/asyncio.html) module from [PyPI](https://pypi.python.org/pypi).
+KNXmap requires Python 3.3 or newer. There are no external dependencies, everything is included in the standard library. Users of Python 3.3 need to install the [asyncio](https://docs.python.org/3/library/asyncio.html) module from [PyPI](https://pypi.python.org/pypi).
 
 ## Usage
 
-Invoke `knxmap.py` locally or install it:
-
 ```
 python setup.py install
+knxmap -h
 ```
 
 ## Documentation
