@@ -20,15 +20,17 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         self.future = future
         self.connection_type = connection_type
         self.layer_type = layer_type
-        self.target_futures = dict()
+        self.target_futures = {}
         self.loop = loop or asyncio.get_event_loop()
         self.transport = None
+        self.peername = None
+        self.sockname = None
         self.tunnel_established = False
         self.communication_channel = None
         self.sequence_count = 0  # sequence counter in KNX body
-        self.tpci_seq_counts = dict()  # NCD/NPD counter for each TPCI connection
+        self.tpci_seq_counts = {}  # NCD/NPD counter for each TPCI connection
         self.knx_source_address = knx_source
-        self.response_queue = list()
+        self.response_queue = []
         self.ndp_defer_time = ndp_defer_time
 
     def connection_made(self, transport):

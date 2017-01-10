@@ -82,7 +82,7 @@ class KnxBusMonitor(KnxTunnelConnection):
     def print_message(self, message):
         """A generic message printing function. It defines a format for the monitoring modes."""
         assert isinstance(message, KnxTunnellingRequest)
-        cemi = tpci = apci = dict()
+        cemi = tpci = apci= {}
         if message.body.get('cemi'):
             cemi = message.body.get('cemi')
             if cemi.get('tpci'):

@@ -17,7 +17,8 @@ __all__ = ['Targets',
 
 LOGGER = logging.getLogger(__name__)
 
-class Targets:
+
+class Targets(object):
     """A helper class that expands provided target definitions to a list of tuples."""
     def __init__(self, targets=None, ports=3671):
         self.targets = set()
@@ -52,13 +53,13 @@ class Targets:
                     self.targets.add((str(_target), port))
 
 
-class KnxTargets:
+class KnxTargets(object):
     """A helper class that expands knx bus targets to lists."""
     def __init__(self, targets):
         self.targets = set()
         if not targets:
             self.targets = None
-        elif not '-' in targets and self.is_valid_physical_address(targets):
+        elif '-' not in targets and self.is_valid_physical_address(targets):
             self.targets.add(targets)
         else:
             assert isinstance(targets, str)
@@ -135,7 +136,7 @@ class KnxTargets:
         return True
 
 
-class BusResultSet:
+class BusResultSet(object):
     # TODO: implement
 
     def __init__(self):
@@ -146,8 +147,7 @@ class BusResultSet:
         pass
 
 
-class KnxTargetReport:
-
+class KnxTargetReport(object):
     def __init__(self, host, port, mac_address, knx_address, device_serial,
                  friendly_name, device_status, knx_medium, project_install_identifier,
                  supported_services, bus_devices):
@@ -170,8 +170,7 @@ class KnxTargetReport:
         return self.host
 
 
-class KnxBusTargetReport:
-
+class KnxBusTargetReport(object):
     def __init__(self, address, medium=None, type=None, version=None,
                  device_serial=None, manufacturer=None, properties=None):
         self.address = address
@@ -192,7 +191,7 @@ class KnxBusTargetReport:
 def print_knx_target(knx_target):
     """Print a target of type KnxTargetReport in a well formatted way."""
     # TODO: make this better, and prettier.
-    out = dict()
+    out = {}
     out[knx_target.host] = collections.OrderedDict()
     o = out[knx_target.host]
     o['Port'] = knx_target.port
@@ -205,16 +204,16 @@ def print_knx_target(knx_target):
     o['Project Install Identifier'] = knx_target.project_install_identifier
     o['Supported Services'] = knx_target.supported_services
     if knx_target.bus_devices:
-        o['Bus Devices'] = list()
+        o['Bus Devices'] = []
 
         # Sort the device list based on KNX addresses
-        x = dict()
+        x = {}
         for i in knx_target.bus_devices:
             x[KnxMessage.pack_knx_address(str(i))] = i
         bus_devices = collections.OrderedDict(sorted(x.items()))
 
         for k, d in bus_devices.items():
-            _d = dict()
+            _d = {}
             _d[d.address] = collections.OrderedDict()
             if hasattr(d, 'type') and \
                     not isinstance(d.type, (type(None), type(False))):
@@ -232,7 +231,7 @@ def print_knx_target(knx_target):
                     not isinstance(d.version, (type(None), type(False))):
                 _d[d.address]['Version'] = d.version
             if hasattr(d, 'properties') and \
-                isinstance(d.properties, dict) and d.properties:
+                    isinstance(d.properties, dict) and d.properties:
                 _d[d.address]['Properties'] = d.properties
             o['Bus Devices'].append(_d)
 

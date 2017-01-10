@@ -3,7 +3,8 @@ import asyncio
 import logging
 
 from knxmap.data.constants import *
-from knxmap.messages import *
+from knxmap.messages import parse_message, KnxSearchRequest, KnxSearchResponse, \
+                            KnxDescriptionRequest, KnxDescriptionResponse
 
 __all__ = ['KnxGatewaySearch',
            'KnxGatewayDescription']
@@ -15,10 +16,11 @@ class KnxGatewaySearch(asyncio.DatagramProtocol):
     """A protocol implementation for searching KNXnet/IP gateways via
     multicast messages. The protocol will hold a set responses with
     all the KNXnet/IP gateway responses."""
-
     def __init__(self, loop=None):
         self.loop = loop or asyncio.get_event_loop()
         self.transport = None
+        self.peername = None
+        self.sockname = None
         self.responses = set()
 
     def connection_made(self, transport):
@@ -37,12 +39,14 @@ class KnxGatewaySearch(asyncio.DatagramProtocol):
 
 
 class KnxGatewayDescription(asyncio.DatagramProtocol):
-    """Protocol implelemtation for KNXnet/IP description requests."""
-
+    """Protocol implementation for KNXnet/IP description requests."""
     def __init__(self, future, loop=None, timeout=2):
         self.future = future
         self.loop = loop or asyncio.get_event_loop()
         self.transport = None
+        self.peername = None
+        self.sockname = None
+        self.wait = None
         self.timeout = timeout
 
     def connection_made(self, transport):

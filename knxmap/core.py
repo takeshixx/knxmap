@@ -28,9 +28,8 @@ __all__ = ['KnxMap']
 LOGGER = logging.getLogger(__name__)
 
 
-class KnxMap:
+class KnxMap(object):
     """The main scanner instance that takes care of scheduling workers for the targets."""
-
     def __init__(self, targets=None, max_workers=100, loop=None):
         self.loop = loop or asyncio.get_event_loop()
         # The number of concurrent workers for discovering KNXnet/IP gateways
@@ -38,16 +37,20 @@ class KnxMap:
         # q contains all KNXnet/IP gateways
         self.q = Queue(loop=self.loop)
         # bus_queues is a dict containing a bus queue for each KNXnet/IP gateway
-        self.bus_queues = dict()
+        self.bus_queues = {}
         # bus_protocols is a list of all bus protocol instances for proper connection shutdown
-        self.bus_protocols = list()
+        self.bus_protocols = []
         # knx_gateways is a list of KnxTargetReport objects, one for each found KNXnet/IP gateway
-        self.knx_gateways = list()
+        self.knx_gateways = []
         # bus_devices is a list of KnxBusTargetReport objects, one for each found bus device
         self.bus_devices = set()
         self.bus_info = False
         self.t0 = time.time()
         self.t1 = None
+        self.iface = None
+        self.desc_timeout = None
+        self.desc_retries = None
+        self.knx_source = None
         if targets:
             self.set_targets(targets)
         else:
@@ -341,6 +344,7 @@ class KnxMap:
             while True:
                 target = self.q.get_nowait()
                 LOGGER.debug('Scanning {}'.format(target))
+                response = None
                 for _try in range(self.desc_retries):
                     LOGGER.debug('Sending {}. KnxDescriptionRequest to {}'.format(_try, target))
                     future = asyncio.Future()
@@ -508,7 +512,6 @@ class KnxMap:
                     value = int(value)
                 yield from protocol.apci_group_value_write(target, value=value)
                 protocol.knx_tunnel_disconnect()
-
 
     @asyncio.coroutine
     def apci(self, target, desc_timeout=2, desc_retries=2, iface=False, args=None):
