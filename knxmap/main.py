@@ -29,81 +29,84 @@ SUBARGS = ARGS.add_subparsers(dest='cmd')
 # General options
 ARGS.add_argument(
     '-v', '--verbose', action='count', dest='level',
-    default=2, help='Verbose logging (repeat for more verbose)')
+    default=2, help='verbose logging (repeat for more verbosity)')
 ARGS.add_argument(
     '-q', '--quiet', action='store_const', const=0, dest='level',
-    default=2, help='Only log errors')
+    default=2, help='only log errors')
 ARGS.add_argument(
     '-p', action='store', dest='port', type=int,
-    default=3671, help='UDP port to be scanned')
+    default=3671, help='target UDP port')
 ARGS.add_argument(
     '-i', action='store', dest='iface',
-    default=None, help='Interface to be used')
+    default=None, help='network interface')
 ARGS.add_argument(
     '--workers', action='store', type=int, metavar='N',
-    default=30, help='Limit concurrent workers')
+    default=30, help='count of concurrent workers')
 ARGS.add_argument(
     '--timeout', action='store', dest='timeout', type=int,
-    default=2, help='Timeout in seconds for unicast description responses')
+    default=2, help='timeout (in seconds) for unicast description responses')
 ARGS.add_argument(
     '--retries', action='store', dest='retries', type=int,
-    default=3, help='Count of retries for description requests')
+    default=3, help='count of retries for description requests')
 ARGS.add_argument(
     '--knx-source-address', action='store', dest='knx_source',
     default=None, help='KNX source address used for messages to bus devices')
 
-pscan = SUBARGS.add_parser('scan', help='Scan KNXnet/IP gateways and attached bus devices')
+pscan = SUBARGS.add_parser('scan', help='scan KNXnet/IP gateways and attached bus devices',
+                           formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 pscan.add_argument(
-    'targets', help='KNXnet/IP gateway', metavar='gateway')
+    'targets', help='KNXnet/IP gateway IP address or hostname', metavar='gateway')
 pscan.add_argument(
     'bus_targets', action='store', nargs='?',
-    default=None, help='Bus target range (e.g. 1.1.0-1.1.10)')
+    default=None, help='bus target range (e.g. 1.1.0-1.1.10)')
 pscan.add_argument(
     '--bus-info', action='store_true', dest='bus_info',
-    default=False, help='Try to extract information from alive bus devices')
+    default=False, help='try to extract information from alive bus devices')
 pscan.add_argument(
     '--key', action='store', dest='auth_key',
-    default=0xffffffff, help='Authorize key for System 2 and System 7 devices')
+    default=0xffffffff, help='authorization key for System 2 and System 7 devices')
 pscan.add_argument(
     '--bus-timeout', action='store', dest='bus_timeout', type=int,
-    default=2, help='Waiting time for deferred NDP messages')
+    default=2, help='waiting time (in seconds) for deferred NDP messages')
 
 psearch = SUBARGS.add_parser('search',
-                             help='Search for KNXnet/IP gateways on the local network')
+                             help='search for KNXnet/IP gateways on the local network')
 psearch.add_argument(
     '--search-timeout', action='store', dest='search_timeout', type=int,
-    default=5, help='Timeout in seconds for multicast responses')
+    default=5, help='timeout (in seconds) for multicast responses')
 
-pwrite = SUBARGS.add_parser('write', help='Write a value to a group address')
+pwrite = SUBARGS.add_parser('write', help='Write a value to a group address',
+                            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 pwrite.add_argument(
-    'targets', help='KNXnet/IP gateway', metavar='gateway')
+    'targets', help='KNXnet/IP gateway IP address or hostname', metavar='gateway')
 pwrite.add_argument(
-    'group_write_address', help='A KNX group address to write to')
+    'group_write_address', help='a KNX group address to write values to')
 pwrite.add_argument(
-    'group_write_value', default=0, help='Value to write to the group address')
+    'group_write_value', default=0, help='value to write to a group address')
 pwrite.add_argument(
     '--routing', action='store_true', dest='routing',
-    default=False, help='Use Routing instead of Tunnelling')
+    default=False, help='use Routing instead of Tunnelling')
 
-papci = SUBARGS.add_parser('apci', help='Execute an APCI function')
+papci = SUBARGS.add_parser('apci', help='Execute an APCI function',
+                           formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 papci.add_argument(
-    'targets', help='KNXnet/IP gateway', metavar='gateway')
+    'targets', help='KNXnet/IP gateway IP address or hostname', metavar='gateway')
 papci.add_argument(
-    'device', help='An individual KNX address')
+    'device', help='an individual (physical) KNX address')
 papci.add_argument(
     'apci_type', default=0, help='APCI type')
 papci.add_argument(
     '--routing', action='store_true', dest='routing',
-    default=False, help='Use Routing instead of Tunnelling')
+    default=False, help='use Routing instead of Tunnelling')
 papci.add_argument(
     '--memory-address', action='store', dest='memory_address',
-    default=0x0060, help='Memory address')
+    default=0x0060, help='target memory address')
 papci.add_argument(
     '--read-count', action='store', dest='read_count', type=int,
-    default=1, help='Number of bytes to read from memory')
+    default=1, help='count of bytes to read from memory')
 papci.add_argument(
     '--object-index', action='store', dest='object_index',
-    type = int, default=0, help='TBD')
+    type=int, default=0, help='TBD')
 papci.add_argument(
     '--property-id', action='store', dest='property_id',
     default=0x0f, help='TBD')
