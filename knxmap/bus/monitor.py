@@ -3,14 +3,15 @@ import logging
 
 from knxmap.bus.tunnel import KnxTunnelConnection
 from knxmap.data.constants import *
-from knxmap.messages import *
+from knxmap.messages import parse_message, KnxConnectRequest, KnxConnectResponse, \
+                            KnxTunnellingRequest, KnxTunnellingAck, KnxConnectionStateResponse, \
+                            KnxDisconnectRequest, KnxDisconnectResponse
 
 LOGGER = logging.getLogger(__name__)
 
 
 class KnxBusMonitor(KnxTunnelConnection):
     """Implementation of bus_monitor_mode and group_monitor_mode."""
-
     def __init__(self, future, loop=None, group_monitor=True):
         self.future = future
         self.loop = loop or asyncio.get_event_loop()

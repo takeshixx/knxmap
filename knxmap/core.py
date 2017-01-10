@@ -15,9 +15,9 @@ except ImportError:
     from asyncio import Queue
 
 from knxmap.data.constants import *
-from knxmap.messages import *
+from knxmap.messages import KnxMessage, KnxCemiFrame, KnxDescriptionResponse
 from knxmap.gateway import *
-from knxmap.manufacturers import *
+from knxmap.data.manufacturers import *
 from knxmap.targets import *
 from knxmap.bus.tunnel import KnxTunnelConnection
 from knxmap.bus.router import KnxRoutingConnection

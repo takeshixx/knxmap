@@ -3,7 +3,10 @@ import logging
 import struct
 
 from knxmap.data.constants import *
-from knxmap.messages import *
+from knxmap.messages import parse_message, KnxMessage, KnxConnectRequest, KnxConnectResponse, \
+                            KnxDisconnectRequest, KnxDisconnectResponse, KnxDeviceConfigurationRequest, \
+                            KnxDeviceConfigurationAck, KnxTunnellingRequest, KnxTunnellingAck, \
+                            KnxConnectionStateRequest, KnxConnectionStateResponse
 
 LOGGER = logging.getLogger(__name__)
 

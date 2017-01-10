@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 from knxmap.data.constants import *
-from knxmap.messages import *
+from knxmap.messages import KnxRoutingIndication
 
 LOGGER = logging.getLogger(__name__)
 

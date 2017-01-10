@@ -6,7 +6,7 @@ import ipaddress
 import logging
 
 from knxmap.data.constants import *
-from knxmap.messages import *
+from knxmap.messages import KnxMessage
 
 __all__ = ['Targets',
            'KnxTargets',
