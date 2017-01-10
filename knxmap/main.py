@@ -118,45 +118,47 @@ papci.add_argument(
     type=int, default=1, help='TBD')
 papci.add_argument(
     '--key', action='store', dest='auth_key',
-    default=0xffffffff, help='Authorize key for System 2 and System 7 devices')
+    default=0xffffffff, help='authorization key for System 2 and System 7 devices')
 papci.add_argument(
     '--new-key', action='store', dest='new_auth_key',
-    default=0xffffffff, help='Set new authorization key')
+    default=0xffffffff, help='new authorization key')
 papci.add_argument(
     '--key-level', action='store', dest='auth_level', type=int,
-    default=0, help='Authorization level for A_Key_Write')
+    default=0, help='authorization level for A_Key_Write')
 papci.add_argument(
     '--memory-data', action='store', dest='memory_data',
-    default=0x00, help='Data to be written to memory address')
+    default=0x00, help='data to be written to a memory address')
 papci.add_argument(
     '--toggle', action='store_true', dest='toggle',
-    default=False, help='Toggle something (e.g. progmode)')
+    default=False, help='toggle something (e.g. progmode)')
 papci.add_argument(
     '--ignore-auth', action='store_true', dest='ignore_auth',
-    default=False, help='Ignore authorization')
+    default=False, help='ignore authorization')
 
-pbrute = SUBARGS.add_parser('brute', help='Bruteforce authentication key')
+pbrute = SUBARGS.add_parser('brute', help='Bruteforce authentication key',
+                            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 pbrute.add_argument(
-    'targets', help='KNXnet/IP gateway', metavar='gateway')
+    'targets', help='KNXnet/IP gateway IP address or hostname', metavar='gateway')
 pbrute.add_argument(
-    'bus_target', help='Individual address of bus device')
+    'bus_target', help='individual address of a bus device')
 pbrute.add_argument(
     '--full-key-space', action='store_true', dest='full_key_space',
-    default=False, help='Bruteforce the full key space (0 - 0xffffffff)')
+    default=False, help='bruteforce the full key space (0 - 0xffffffff)')
 
-pmonitor = SUBARGS.add_parser('monitor', help='Monitor bus and group messages')
+pmonitor = SUBARGS.add_parser('monitor', help='Monitor bus and group messages',
+                              formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 pmonitor.add_argument(
-    'targets', help='KNXnet/IP gateway', metavar='gateway')
+    'targets', help='KNXnet/IP gateway IP address or hostname', metavar='gateway')
 pmonitor.add_argument(
     '--group-monitor', action='store_true', dest='group_monitor_mode',
-    default=False, help='Monitor group instead of messages via KNXnet/IP gateway')
+    default=False, help='monitor group- instead of bus-messages via KNXnet/IP gateway')
 
 
 def main():
     args = ARGS.parse_args()
     levels = [logging.ERROR, logging.WARN, logging.INFO, logging.DEBUG]
-    format = '[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s' if args.level > 2 else '%(message)s'
-    logging.basicConfig(level=levels[min(args.level, len(levels) - 1)], format=format)
+    log_format = '[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s' if args.level > 2 else '%(message)s'
+    logging.basicConfig(level=levels[min(args.level, len(levels) - 1)], format=log_format)
     loop = asyncio.get_event_loop()
 
     if hasattr(args, 'targets'):
