@@ -145,7 +145,7 @@ class KnxMap(object):
                             target,
                             memory_address=0x0060)
                         if device_state:
-                            properties['DEVICE_STATE'] = KnxMessage.unpack_cemi_runstate(
+                            properties['DEVICE_STATE'] = KnxCemiFrame.unpack_cemi_runstate(
                                 int.from_bytes(device_state, 'big'))
 
                         # Read the serial number object on System 2 and System 7 devices
@@ -794,10 +794,10 @@ class KnxMap(object):
                         LOGGER.debug('No data received')
                     else:
                         data = int.from_bytes(data, 'big')
-                        run_state = KnxMessage.unpack_cemi_runstate(data)
+                        run_state = KnxCemiFrame.unpack_cemi_runstate(data)
                         if args.toggle:
                             if run_state.get('PROG_MODE'):
-                                run_state = KnxMessage.pack_cemi_runstate(
+                                run_state = KnxCemiFrame.pack_cemi_runstate(
                                     prog_mode=False,
                                     link_layer_active=run_state.get('LINK_LAYER'),
                                     transport_layer_active=run_state.get('TRANSPORT_LAYER'),
@@ -806,7 +806,7 @@ class KnxMap(object):
                                     user_app_run=run_state.get('USER_APP'),
                                     bcu_download_mode=run_state.get('BC_DM'))
                             else:
-                                run_state = KnxMessage.pack_cemi_runstate(
+                                run_state = KnxCemiFrame.pack_cemi_runstate(
                                     prog_mode=True,
                                     link_layer_active=run_state.get('LINK_LAYER'),
                                     transport_layer_active=run_state.get('TRANSPORT_LAYER'),
