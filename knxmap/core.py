@@ -298,7 +298,7 @@ class KnxMap(object):
             try:
                 # Wait until connection_made() has been called on the transport
                 yield from waiter
-            except:
+            except asyncio.CancelledError:
                 LOGGER.error('Creating multicast transport failed!')
                 transport.close()
                 return
@@ -486,7 +486,7 @@ class KnxMap(object):
             try:
                 # Wait until connection_made() has been called on the transport
                 yield from waiter
-            except:
+            except asyncio.CancelledError:
                 LOGGER.error('Creating multicast transport failed!')
                 transport.close()
                 return
