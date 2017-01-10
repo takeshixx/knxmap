@@ -15,10 +15,11 @@ elif sys.version_info.major > 2 and \
     install_require.append('asyncio')
 
 setup(name='KNXmap',
-      version='0.9.1',
+      version='0.9.3',
       packages=['knxmap',
                 'knxmap.bus',
-                'knxmap.data'],
+                'knxmap.data',
+                'knxmap.messages'],
       entry_points={
           'console_scripts': ['knxmap=knxmap.main:main']},
       install_requires=install_require,
