@@ -364,14 +364,15 @@ class KnxMap(object):
                         break
 
                 if response and isinstance(response, KnxDescriptionResponse):
-                    t = KnxTargetReport(
+                    target_report = KnxTargetReport(
                         host=target[0],
                         port=target[1],
                         mac_address=response.body.get('dib_dev_info').get('knx_mac_address'),
                         knx_address=response.body.get('dib_dev_info').get('knx_address'),
                         device_serial=response.body.get('dib_dev_info').get('knx_device_serial'),
                         friendly_name=response.body.get('dib_dev_info').get('device_friendly_name'),
-                        device_status=response.body.get('dib_dev_info').get('device_status'),
+                        device_status=knxmap.utils.make_runstate_printable(
+                            response.body.get('dib_dev_info').get('device_status')),
                         knx_medium=response.body.get('dib_dev_info').get('knx_medium'),
                         project_install_identifier=response.body.get('dib_dev_info').get('project_install_identifier'),
                         supported_services=[
@@ -395,27 +396,67 @@ class KnxMap(object):
                         # Make sure the tunnel has been established
                         connected = yield from future
                         if connected:
+                            configuration = collections.OrderedDict()
+                            # Read additional individual addresses
+                            count = yield from bus_protocol.configuration_request(
+                                        target,
+                                        object_type=11,
+                                        start_index=0,
+                                        property=OBJECTS.get(11).get('PID_ADDITIONAL_INDIVIDUAL_ADDRESSES'))
+                            if count and count.data:
+                                count = int.from_bytes(count.data, 'big')
+                                conf_response = yield from bus_protocol.configuration_request(
+                                        target,
+                                        object_type=11,
+                                        num_elements=count,
+                                        property=OBJECTS.get(11).get('PID_ADDITIONAL_INDIVIDUAL_ADDRESSES'))
+                                if conf_response and conf_response.data:
+                                    data = conf_response.data
+                                    target_report.additional_individual_addresses = []
+                                    for addr in [data[i:i+2] for i in range(0, len(data), 2)]:
+                                        target_report.additional_individual_addresses.append(
+                                            knxmap.utils.parse_knx_address(int.from_bytes(addr, 'big')))
+
+                            # Read manufacurer ID
+                            count = yield from bus_protocol.configuration_request(
+                                        target,
+                                        object_type=0,
+                                        start_index=0,
+                                        property=OBJECTS.get(0).get('PID_MANUFACTURER_ID'))
+                            if count and count.data:
+                                count = int.from_bytes(count.data, 'big')
+                                conf_response = yield from bus_protocol.configuration_request(
+                                        target,
+                                        object_type=0,
+                                        num_elements=count,
+                                        property=OBJECTS.get(0).get('PID_MANUFACTURER_ID'))
+                                if conf_response and conf_response.data:
+                                    target_report.manufacturer = knxmap.utils.get_manufacturer_by_id(
+                                        int.from_bytes(conf_response.data, 'big'))
+
                             # TODO: do more precise checks what to extract and add it to the target report
-                            for k, v in OBJECTS.get(11).items():
-                                count = yield from bus_protocol.make_configuration_request(target, object_type=11,
-                                                                                                   start_index=0,
-                                                                                                   property=v)
+                            for k, v in OBJECTS.get(0).items():
+                                count = yield from bus_protocol.configuration_request(target,
+                                                                                      object_type=0,
+                                                                                      start_index=0,
+                                                                                      property=v)
                                 if count and count.data:
                                     count = int.from_bytes(count.data, 'big')
                                 else:
                                     continue
-                                conf_response = yield from bus_protocol.make_configuration_request(target,
-                                                                                                   object_type=11,
-                                                                                                   num_elements=count,
-                                                                                                   property=v)
+                                conf_response = yield from bus_protocol.configuration_request(target,
+                                                                                              object_type=0,
+                                                                                              num_elements=count,
+                                                                                              property=v)
                                 if conf_response and conf_response.data:
+
                                     print(k + ':')
                                     print(conf_response.data)
 
                             bus_protocol.knx_tunnel_disconnect()
 
                     # TODO: at the end, add alive gateways to this list
-                    self.knx_gateways.append(t)
+                    self.knx_gateways.append(target_report)
                 self.q.task_done()
         except (asyncio.CancelledError, asyncio.QueueEmpty):
             pass

@@ -150,7 +150,8 @@ class BusResultSet(object):
 class KnxTargetReport(object):
     def __init__(self, host, port, mac_address, knx_address, device_serial,
                  friendly_name, device_status, knx_medium, project_install_identifier,
-                 supported_services, bus_devices):
+                 supported_services, bus_devices, additional_individual_addresses=None,
+                 manufacturer=None):
         self.host = host
         self.port = port
         self.mac_address = mac_address
@@ -162,6 +163,8 @@ class KnxTargetReport(object):
         self.project_install_identifier = project_install_identifier
         self.supported_services = supported_services
         self.bus_devices = bus_devices
+        self.additional_individual_addresses = additional_individual_addresses or []
+        self.manufacturer = manufacturer
 
     def __str__(self):
         return self.host
@@ -197,8 +200,12 @@ def print_knx_target(knx_target):
     o['Port'] = knx_target.port
     o['MAC Address'] = knx_target.mac_address
     o['KNX Bus Address'] = knx_target.knx_address
+    if knx_target.additional_individual_addresses:
+        o['Additional Bus Addresses'] = knx_target.additional_individual_addresses
     o['KNX Device Serial'] = knx_target.device_serial
     o['KNX Medium'] = KNX_MEDIUMS.get(knx_target.knx_medium)
+    if knx_target.manufacturer:
+        o['Manufacturer'] = knx_target.manufacturer
     o['Device Friendly Name'] = binascii.b2a_qp(knx_target.friendly_name.strip().replace(b'\x00', b'')).decode()
     o['Device Status'] = knx_target.device_status
     o['Project Install Identifier'] = knx_target.project_install_identifier
