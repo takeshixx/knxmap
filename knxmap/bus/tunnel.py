@@ -159,9 +159,9 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             if cemi_msg_code == CEMI_MSG_CODES.get('M_PropRead.con'):
                 if knx_msg.num_elements == 0:
                     if knx_msg.data:
-                        LOGGER.error(CEMI_ERROR_CODES.get(knx_msg.data[0]))
+                        LOGGER.debug(CEMI_ERROR_CODES.get(knx_msg.data[0]))
                     else:
-                        LOGGER.error('An unknown error occured')
+                        LOGGER.debug('An unknown error occured')
                     self.process_target(knx_msg.source, False, knx_msg)
                 else:
                     self.process_target(knx_msg.source, knx_msg)
@@ -337,8 +337,8 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         tunnel_request.set_peer(self.transport.get_extra_info('sockname'))
         return tunnel_request
 
-    def make_configuration_request(self, target, object_type=0, object_instance=1,
-                                   property=0, num_elements=1, start_index=1):
+    def configuration_request(self, target, object_type=0, object_instance=1,
+                              property=0, num_elements=1, start_index=1):
         conf_request = KnxDeviceConfigurationRequest(
             sockname=self.transport.get_extra_info('sockname'),
             communication_channel=self.communication_channel,

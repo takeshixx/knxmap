@@ -17,23 +17,22 @@ class KnxTunnellingRequest(KnxMessage):
                  message_code=0x11):
         super(KnxTunnellingRequest, self).__init__()
         self.cemi = CemiFrame()
+        self.header['service_type'] = KNX_MESSAGE_TYPES.get('TUNNELLING_REQUEST')
+        self.communication_channel = communication_channel
+        self.sequence_count = sequence_count
+        self.message_code = message_code
+        if knx_source:
+            self.set_knx_source(knx_source)
+        if knx_destination:
+            self.set_knx_destination(knx_destination)
+        try:
+            self.source, self.port = sockname
+        except TypeError:
+            self.source = None
+            self.port = None
         if message:
             self.message = message
             self.unpack_knx_message(message)
-        else:
-            self.header['service_type'] = KNX_MESSAGE_TYPES.get('TUNNELLING_REQUEST')
-            self.communication_channel = communication_channel
-            self.sequence_count = sequence_count
-            self.message_code = message_code
-            if knx_source:
-                self.set_knx_source(knx_source)
-            if knx_destination:
-                self.set_knx_destination(knx_destination)
-            try:
-                self.source, self.port = sockname
-            except TypeError:
-                self.source = None
-                self.port = None
 
     def _pack_knx_body(self, cemi=None):
         self.body = bytearray(struct.pack('!B', 4))  # structure_length
