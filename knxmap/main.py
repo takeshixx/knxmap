@@ -60,6 +60,9 @@ pscan.add_argument(
     'bus_targets', action='store', nargs='?',
     default=None, help='bus target range (e.g. 1.1.0-1.1.10)')
 pscan.add_argument(
+    '--omit-configuration-reads', action='store_false', dest='configuration_reads',
+    default=True, help='omit DEVICE_CONFIGURATION_REQUESTs (scanning will be faster, but less verbose')
+pscan.add_argument(
     '--bus-info', action='store_true', dest='bus_info',
     default=False, help='try to extract information from alive bus devices')
 pscan.add_argument(
@@ -211,7 +214,8 @@ def main():
                 bus_targets=bus_targets.targets,
                 bus_info=args.bus_info,
                 knx_source=args.knx_source,
-                auth_key=args.auth_key))
+                auth_key=args.auth_key,
+                configuration_reads=args.configuration_reads))
     except KeyboardInterrupt:
         for t in asyncio.Task.all_tasks():
             t.cancel()

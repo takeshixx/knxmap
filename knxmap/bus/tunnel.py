@@ -3,6 +3,7 @@ import logging
 import struct
 
 from knxmap.data.constants import *
+import knxmap.utils
 from knxmap.messages import parse_message, KnxMessage, KnxConnectRequest, KnxConnectResponse, \
                             KnxDisconnectRequest, KnxDisconnectResponse, KnxDeviceConfigurationRequest, \
                             KnxDeviceConfigurationAck, KnxTunnellingRequest, KnxTunnellingAck, \
@@ -56,19 +57,22 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         target that arrived out-of-band."""
         if self.response_queue:
             for response in self.response_queue:
-                knx_src = response.parse_knx_address(response.body.get('cemi').get('knx_source'))
-                knx_dst = response.parse_knx_address(response.body.get('cemi').get('knx_destination'))
-                if not knx_src and not knx_dst:
+                try:
+                    src_addr = knxmap.utils.parse_knx_address(response.cemi.knx_source)
+                    dst_addr = knxmap.utils.parse_knx_address(response.cemi.knx_destination)
+                except AttributeError:
+                    src_addr = knxmap.utils.unpack_ip_address(response.source)
+                    dst_addr = self.sockname[0]
+                if not src_addr and not dst_addr:
                     continue
-
-                if knx_dst in self.target_futures.keys():
-                    if not self.target_futures[knx_dst].done():
-                        self.target_futures[knx_dst].set_result(response)
-                    del self.target_futures[knx_dst]
-                elif knx_src in self.target_futures.keys():
-                    if not self.target_futures[knx_src].done():
-                        self.target_futures[knx_src].set_result(response)
-                    del self.target_futures[knx_src]
+                if dst_addr in self.target_futures.keys():
+                    if not self.target_futures[dst_addr].done():
+                        self.target_futures[dst_addr].set_result(response)
+                    del self.target_futures[dst_addr]
+                elif src_addr in self.target_futures.keys():
+                    if not self.target_futures[src_addr].done():
+                        self.target_futures[src_addr].set_result(response)
+                    del self.target_futures[src_addr]
         # Reschedule polling
         self.loop.call_later(2, self.poll_response_queue)
 
@@ -106,6 +110,8 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             self.transport.close()
             self.future.set_result(None)
             return
+        knx_msg.set_peer(addr)
+        LOGGER.trace_incoming(knx_msg)
         knx_service_type = knx_msg.header.get('service_type') >> 8
         if knx_service_type is 0x02:  # Core
             self.handle_core_services(knx_msg)
@@ -133,7 +139,8 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             # After receiving a CONNECTIONSTATE_RESPONSE schedule the next one
             self.loop.call_later(50, self.knx_keep_alive)
         elif isinstance(knx_msg, KnxDisconnectRequest):
-            disconnect_response = KnxDisconnectResponse(communication_channel=self.communication_channel)
+            disconnect_response = KnxDisconnectResponse(
+                communication_channel=self.communication_channel)
             self.transport.sendto(disconnect_response.get_message())
             self.transport.close()
             if not self.future.done():
@@ -325,13 +332,19 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         tunnel_request.set_peer(self.transport.get_extra_info('sockname'))
         return tunnel_request
 
-    def make_configuration_request(self):
+    def make_configuration_request(self, target, object_type=0, object_instance=1,
+                                   property=0, num_elements=1, start_index=1):
         conf_request = KnxDeviceConfigurationRequest(
             sockname=self.transport.get_extra_info('sockname'),
             communication_channel=self.communication_channel,
-            sequence_count=self.sequence_count)
-        # conf_request.set_peer(self.transport.get_extra_info('sockname'))
-        return conf_request
+            sequence_count=self.sequence_count,
+            object_type=object_type,
+            object_instance=object_instance,
+            property=property,
+            num_elements=num_elements,
+            start_index=start_index)
+        LOGGER.trace_outgoing(conf_request)
+        return self.send_data(conf_request.get_message(), target[0])
 
     def knx_keep_alive(self):
         """Sending CONNECTIONSTATE_REQUESTS periodically to

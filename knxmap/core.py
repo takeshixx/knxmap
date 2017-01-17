@@ -371,6 +371,42 @@ class KnxMap(object):
                             response.body.get('dib_supp_sv_families').get('families').items()],
                         bus_devices=[])
 
+                    # TODO: should we check if the device announces support? (support is mandatory)
+                    if self.configuration_reads:
+                        # Try to create a DEVICE_MGMT_CONNECTION connection
+                        future = asyncio.Future()
+                        transport, bus_protocol = yield from self.loop.create_datagram_endpoint(
+                            functools.partial(
+                                KnxTunnelConnection,
+                                future,
+                                connection_type=_CONNECTION_TYPES.get('DEVICE_MGMT_CONNECTION'),
+                                ndp_defer_time=self.bus_timeout,
+                                knx_source=self.knx_source),
+                            remote_addr=target)
+                        self.bus_protocols.append(bus_protocol)
+                        # Make sure the tunnel has been established
+                        connected = yield from future
+                        if connected:
+                            # TODO: do more precise checks what to extract and add it to the target report
+                            for k, v in OBJECTS.get(11).items():
+                                count = yield from bus_protocol.make_configuration_request(target, object_type=11,
+                                                                                                   start_index=0,
+                                                                                                   property=v)
+                                if count and count.data:
+                                    count = int.from_bytes(count.data, 'big')
+                                else:
+                                    continue
+                                conf_response = yield from bus_protocol.make_configuration_request(target,
+                                                                                                   object_type=11,
+                                                                                                   num_elements=count,
+                                                                                                   property=v)
+                                if conf_response and conf_response.data:
+                                    print(k + ':')
+                                    print(conf_response.data)
+
+                            bus_protocol.knx_tunnel_disconnect()
+
+                    # TODO: at the end, add alive gateways to this list
                     self.knx_gateways.append(t)
                 self.q.task_done()
         except (asyncio.CancelledError, asyncio.QueueEmpty):
