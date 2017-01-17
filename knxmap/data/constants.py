@@ -25,7 +25,10 @@ __all__ = ['KNX_CONSTANTS',
            'OBJECT_TYPES',
            'DEVICE_OBJECTS',
            'PARAMETER_OBJECTS',
-           'OBJECTS']
+           'OBJECTS',
+           'CONNECTION_TYPES',
+           '_CONNECTION_TYPES',
+           'CEMI_ERROR_CODES']
 
 KNX_CONSTANTS = {
     'KNXNETIP_VERSION_10': 0x10,
@@ -65,6 +68,20 @@ DEVICE_TYPES = {
     0x91: 'TP1 Line/area coupler - Repeater',
     0x90: 'Media coupler TP1-PL110'}
 
+CONNECTION_TYPES = {
+    0x03: 'DEVICE_MGMT_CONNECTION',
+    0x04: 'TUNNEL_CONNECTION',
+    0x06: 'REMLOG_CONNECTION',
+    0x07: 'REMCONF_CONNECTION',
+    0x08: 'OBJSVR_CONNECTION'}
+
+_CONNECTION_TYPES = {
+    'DEVICE_MGMT_CONNECTION': 0x03,
+    'TUNNEL_CONNECTION': 0x04,
+    'REMLOG_CONNECTION': 0x06,
+    'REMCONF_CONNECTION': 0x07,
+    'OBJSVR_CONNECTION': 0x08}
+
 LAYER_TYPES = {
     0x02: 'TUNNEL_LINKLAYER',
     0x03: 'DEVICE_MGMT_CONNECTION',
@@ -90,6 +107,13 @@ TPCI_UNNUMBERED_CONTROL_DATA_TYPES = {
 TPCI_NUMBERED_CONTROL_DATA_TYPES = {
     'ACK': 0x02,
     'NACK': 0x03}
+
+KNX_DIB_TYPES = {0x01: 'DEVICE_INFO',
+                 0x02: 'SUPP_SVC_FAMILIES',
+                 0x03: 'IP_CONFIG',
+                 0x04: 'IP_CUR_CONFIG',
+                 0x05: 'KNX_ADDRESSES',
+                 0xfe: 'MFR_DATA'}
 
 _KNX_MESSAGE_TYPES = {
     # KNXnet/IP Core
@@ -167,7 +191,96 @@ KNX_STATUS_CODES = {
     # CONNECT_ACK status codes
     0x29: 'E_TUNNELLING_LAYER'}
 
+CEMI_ERROR_CODES = {
+    0x00: 'UNSPECIFIED_ERROR',
+    0x01: 'OUT_OF_RANGE',
+    0x02: 'OUT_OF_MAX_RANGE',
+    0x03: 'OUT_OF_MIN_RANGE',
+    0x04: 'MEMORY_ERROR',
+    0x05: 'READ_ONLY',
+    0x06: 'ILLEGAL_COMMAND',
+    0x07: 'VOID_DP',
+    0x08: 'TYPE_CONFLICT',
+    0x09: 'PROPERTY_INDEX_RANGE_ERROR',
+    0x0a: 'VALUE_TEMPORARILY_NOT_WRITABLE'}
+
 # See: http://www.openremote.org/display/knowledge/Common+External+Message+Interface+(cEMI)
+"""                        IMI1 EMI1 EMI2  cEMI  default comment
+                                     /IMI2       dest.
+L_Busmon.ind               29   49   2B     2B   PEI
+L_Raw_Data.req                       10     10   LL
+L_Raw_Data.con                              2F
+L_Raw_Data.ind                              2D
+L_Data.req                 11   11   11     11   LL
+L_Data.con                 2E   4E   2E     2E   NL      EMI1/IMI1: TL
+L_Data.ind                 29   49   29     29   NL      EMI1/IMI1: TL
+L_Poll_Data.req                      13     13   LL
+L_Poll_Data.con                      25     25   NL
+N_Data_Individual.req                13          LL
+N_Data_Individual.con                4E          TCL
+N_Data_Individual.ind                49          TCL
+N_Data_Group.req                     22          NL
+N_Data_Group.con                     3E          TLG
+N_Data_Group.ind                     3A          TLG
+N_Data_Broadcast.req                 2C          NL
+N_Data_Broadcast.con                 4F          TLC
+N_Data_Broadcast.ind                 4D          TLC
+N_Poll_Data.req                      23          NL
+N_Poll_Data.con                      35          TLG
+T_Connect.req              23   23   43          TLC      EMI1/IMI1: TL
+T_Connect.con                        86          MG
+T_Connect.ind              33   43   85          MG
+T_Disconnect.req           24   24   44          TLC      EMI1/IMI1: TL
+T_Disconnect.con                     88          MG
+T_Disconnect.ind           34   44   87          MG
+T_Data_Connected.req       21   21   41          TLC      EMI1/IMI1: TL
+T_Data_Connected.con                 8E          MG
+T_Data_Connected.ind       39   49   89          MG
+T_Data_Group.req           22   22   32          TLG      EMI1/IMI1: TL
+T_Data_Group.con           3E   4E   7E          ALG
+T_Data_Group.ind           3A   4A   7A          ALG
+T_Data_Broadcast.req       2B   2B   4C          TLC
+T_Data_Broadcast.con                 8F          MG
+T_Data_Broadcast.ind       38   48   8D          MG
+T_Data_Individual.req      2A   2A   4A          TLC
+T_Data_Individual.con      3F   4F   9C          MG
+T_Data_Individual.ind      32   42   94          MG
+T_Poll_Data.req                      33          TLG
+T_Poll_Data.con                      75          ALG
+M_Connect.req
+M_Connect.con
+M_Connect.ind                        D5          User     PEI if User is not running
+M_Disconnect.req
+M_Disconnect.con
+M_Disconnect.ind                     D7          User     PEI if User is not running
+M_User_Data_Connected.req  31   31   82          MG
+M_User_Data_Connected.con            D1          User     PEI if User is not running
+M_User_Data_Connected.ind  59   49   D2          User     PEI if User is not running
+A_Data_Group.req                     72          ALG
+A_Data_Group.con                     EE          User     PEI if User is not running
+A_Data_Group.ind                     EA          User     PEI if User is not running
+M_User_Data_Individual.req           81          MG
+M_User_Data_Individual.con           DE          User     PEI if User is not running
+M_User_Data_Individual.ind           D9          User     PEI if User is not running
+A_Poll_Data.req                      73          ALG
+A_Poll_Data.con                      E5          User     PEI if User is not running
+M_InterfaceObj_Data.req              9A          MG
+M_InterfaceObj_Data.con              DC          User     PEI if User is not running
+M_InterfaceObj_Data.ind              D4          User     PEI if User is not running
+U_Value_Read.req           35   35   74          ALG
+U_Value_Read.con           55   45   E4          User
+U_Flags_Read.req           37   37   7C          ALG
+U_Flags_Read.con           57   47   EC          User
+U_Event.ind                5D   4D   E7          User
+U_Value_Write.req          36   36   71          ALG
+U_User_data                         >D0          User
+PC_SetValue.req            46   46   A6          MG      In BCU2 not posted to MG but handled in PEI module
+PC_GetValue.req            4C   4C   AC          MG      In BCU2 not posted to MG but handled in PEI module
+PC_GetValue.con            4B   4B   AB          PEI
+PEI_Identify.req                     A7          -
+PEI_Identify.con                     A8          PEI
+PEI_Switch.req                       A9          -
+TM_Timer.ind                         C1         User"""
 CEMI_PRIMITIVES = {
     0x10: 'L_Raw.req',
     0x11: 'L_Data.req',  # Request
@@ -183,6 +296,67 @@ CEMI_PRIMITIVES = {
 #: 'M_FuncPropCommand.req',
 #: 'M_FuncPropStateRead.req'}
 
+EMI1_PRIMITIVES = {
+    0x11: 'L_Data.req',
+    0x49: 'L_Data.ind',
+    0x4e: 'L_Data.con',
+    0x10: 'L_Raw_Data.req',
+    0x13: 'L_Poll_Data.req',
+    0x21: 'T_Data_Connected.req',
+    0x22: 'T_Data_Group.req',
+    0x23: 'T_Connect.req',
+    0x24: 'T_Disconnect.req',
+    0x25: 'L_Poll_Data.con',
+    0x2a: 'T_Data_Individual.req',
+    0x2b: 'T_Data_Broadcast.req',
+    0x31: 'M_User_Data_Connected.req',
+    0x35: 'U_Value_Read.req',
+    0x36: 'U_Value_Write.req',
+    0x37: 'U_Flags_Read.req',
+    0x42: 'T_Data_Individual.ind',
+    0x43: 'T_Connect.ind',
+    0x44: 'T_Disconnect.ind',
+    0x45: 'U_Value_Read.con',
+    0x46: 'PC_SetValue.req',
+    0x47: 'U_Flags_Read.con',
+    0x48: 'T_Data_Broadcast.ind',
+    0x4a: 'T_Data_Group.ind',
+    0x4c: 'PC_GetValue.req',
+    0x4d: 'U_Event.ind',
+    0x4f: 'T_Data_Individual.con'}
+
+_EMI1_PRIMITIVES = {
+    'L_Busmon.ind': 0x49,
+    'L_Raw_Data.req': 0x10,
+    'L_Data.req': 0x11,
+    'L_Data.con': 0x4E,
+    'L_Data.ind': 0x49,
+    'L_Poll_Data.req': 0x13,
+    'L_Poll_Data.con': 0x25,
+    'T_Connect.req': 0x23,
+    'T_Connect.ind': 0x43,
+    'T_Disconnect.req': 0x24,
+    'T_Disconnect.ind': 0x44,
+    'T_Data_Connected.req': 0x21,
+    'T_Data_Connected.ind': 0x49,
+    'T_Data_Group.req': 0x22,
+    'T_Data_Group.con': 0x4E,
+    'T_Data_Group.ind': 0x4A,
+    'T_Data_Broadcast.req': 0x2B,
+    'T_Data_Broadcast.ind': 0x48,
+    'T_Data_Individual.req': 0x2A,
+    'T_Data_Individual.con': 0x4F,
+    'T_Data_Individual.ind': 0x42,
+    'M_User_Data_Connected.req': 0x31,
+    'M_User_Data_Connected.ind': 0x49,
+    'U_Value_Read.req': 0x35,
+    'U_Value_Read.con': 0x45,
+    'U_Flags_Read.req': 0x37,
+    'U_Flags_Read.con': 0x47,
+    'U_Event.ind': 0x4D,
+    'U_Value_Write.req': 0x36,
+    'PC_SetValue.req': 0x46,
+    'PC_GetValue.req': 0x4C}
 
 CEMI_MSG_CODES = {
     'L_Raw.req': 0x10,
