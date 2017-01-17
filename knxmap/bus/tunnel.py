@@ -47,6 +47,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             sockname=self.sockname,
             connection_type=self.connection_type,
             layer_type=self.layer_type)
+        LOGGER.trace_outgoing(connect_request)
         self.transport.sendto(connect_request.get_message())
         # Schedule CONNECTIONSTATE_REQUEST to keep the connection alive
         self.loop.call_later(50, self.knx_keep_alive)
@@ -275,6 +276,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                 tunnelling_ack = KnxTunnellingAck(
                     communication_channel=knx_msg.body.get('communication_channel_id'),
                     sequence_count=knx_msg.body.get('sequence_counter'))
+                LOGGER.trace_outgoing(tunnelling_ack)
                 self.transport.sendto(tunnelling_ack.get_message())
 
         elif isinstance(knx_msg, KnxTunnellingAck):
@@ -302,11 +304,13 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
     def tpci_connect(self, target):
         tunnel_request = self.make_tunnel_request(target)
         tunnel_request.tpci_unnumbered_control_data('CONNECT')
+        LOGGER.trace_outgoing(tunnel_request)
         return self.send_data(tunnel_request.get_message(), target)
 
     def tpci_disconnect(self, target):
         tunnel_request = self.make_tunnel_request(target)
         tunnel_request.tpci_unnumbered_control_data('DISCONNECT')
+        LOGGER.trace_outgoing(tunnel_request)
         return self.send_data(tunnel_request.get_message(), target)
 
     def tpci_send_ncd(self, target):
@@ -317,6 +321,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             self.tpci_seq_counts[target] = 0
         else:
             self.tpci_seq_counts[target] += 1
+        LOGGER.trace_outgoing(tunnel_request)
         return self.send_data(tunnel_request.get_message(), target)
 
     def make_tunnel_request(self, knx_dst):
@@ -352,6 +357,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         connection_state = KnxConnectionStateRequest(
             sockname=self.sockname,
             communication_channel=self.communication_channel)
+        LOGGER.trace_outgoing(connection_state)
         self.transport.sendto(connection_state.get_message())
 
     def knx_tunnel_disconnect(self):
@@ -359,11 +365,13 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         disconnect_request = KnxDisconnectRequest(
             sockname=self.sockname,
             communication_channel=self.communication_channel)
+        LOGGER.trace_outgoing(disconnect_request)
         self.transport.sendto(disconnect_request.get_message())
 
     def knx_tpci_disconnect(self, target):
         tunnel_request = self.make_tunnel_request(target)
         tunnel_request.tpci_unnumbered_control_data('DISCONNECT')
+        LOGGER.trace_outgoing(tunnel_request)
         self.transport.sendto(tunnel_request.get_message())
 
     @asyncio.coroutine
@@ -538,6 +546,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         tunnel_request = self.make_tunnel_request(target)
         tunnel_request.apci_restart(
             sequence=self.tpci_seq_counts.get(target))
+        LOGGER.trace_outgoing(tunnel_request)
         value = yield from self.send_data(tunnel_request.get_message(), target)
         if isinstance(value, KnxTunnellingRequest):
             return True

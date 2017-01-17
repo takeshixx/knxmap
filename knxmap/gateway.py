@@ -55,6 +55,7 @@ class KnxGatewayDescription(asyncio.DatagramProtocol):
         self.sockname = self.transport.get_extra_info('sockname')
         self.wait = self.loop.call_later(self.timeout, self.connection_timeout)
         packet = KnxDescriptionRequest(sockname=self.sockname)
+        LOGGER.trace_outgoing(packet)
         self.transport.sendto(packet.get_message())
 
     def connection_timeout(self):

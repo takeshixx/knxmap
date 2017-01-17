@@ -24,6 +24,7 @@ class KnxRoutingConnection(asyncio.DatagramProtocol):
         self.sockname = self.transport.get_extra_info('sockname')
         packet = KnxRoutingIndication(knx_destination=self.target)
         packet.apci_group_value_write(value=self.value)
+        LOGGER.trace_outgoing(packet)
         self.transport.get_extra_info('socket').sendto(packet.get_message(),
                                                        (KNX_CONSTANTS.get('MULTICAST_ADDR'),
                                                         KNX_CONSTANTS.get('DEFAULT_PORT')))

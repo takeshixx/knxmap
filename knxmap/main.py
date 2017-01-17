@@ -34,6 +34,9 @@ ARGS.add_argument(
     '-q', '--quiet', action='store_const', const=0, dest='level',
     default=2, help='only log errors')
 ARGS.add_argument(
+    '-t', '--trace', action='store_const', const=9, dest='level',
+    default=9, help='print all packets/messages')
+ARGS.add_argument(
     '-p', action='store', dest='port', type=int,
     default=3671, help='target UDP port')
 ARGS.add_argument(
@@ -159,17 +162,23 @@ pmonitor.add_argument(
 
 def main():
     args = ARGS.parse_args()
-    levels = [logging.ERROR, logging.WARN, logging.INFO, logging.DEBUG]
+    levels = [logging.ERROR, logging.WARN, logging.INFO, logging.DEBUG, TRACE_LOG_LEVEL]
     log_format = '[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s' if args.level > 2 else '%(message)s'
+    logging.addLevelName(TRACE_LOG_LEVEL, 'TRACE')
+    logging.Logger.trace = trace_packet
+    logging.Logger.trace_incoming = trace_incoming
+    logging.Logger.trace_outgoing = trace_outgoing
     logging.basicConfig(level=levels[min(args.level, len(levels) - 1)], format=log_format)
     loop = asyncio.get_event_loop()
 
     if hasattr(args, 'targets'):
         targets = Targets(args.targets, args.port)
-        knxmap = KnxMap(targets=targets.targets, max_workers=args.workers)
+        knxmap = KnxMap(targets=targets.targets,
+                        max_workers=args.workers,
+                        medium=args.medium)
     else:
-        knxmap = KnxMap(max_workers=args.workers)
-
+        knxmap = KnxMap(max_workers=args.workers,
+                        medium=args.medium)
     try:
         if args.cmd == 'search':
             if not args.iface:

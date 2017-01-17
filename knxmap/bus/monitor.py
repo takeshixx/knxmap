@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from knxmap.bus.tunnel import KnxTunnelConnection
@@ -31,20 +30,21 @@ class KnxBusMonitor(KnxTunnelConnection):
         else:
             # Create a TUNNEL_BUSMONITOR layer request
             connect_request = KnxConnectRequest(sockname=self.sockname, layer_type='TUNNEL_BUSMONITOR')
+        LOGGER.trace_outgoing(connect_request)
         self.transport.sendto(connect_request.get_message())
         # Send CONNECTIONSTATE_REQUEST to keep the connection alive
         self.loop.call_later(50, self.knx_keep_alive)
 
     def datagram_received(self, data, addr):
         knx_message = parse_message(data)
-
         if not knx_message:
             LOGGER.error('Invalid KNX message: {}'.format(data))
             self.knx_tunnel_disconnect()
             self.transport.close()
             self.future.set_result(None)
             return
-
+        knx_message.set_peer(addr)
+        LOGGER.trace_incoming(knx_message)
         if isinstance(knx_message, KnxConnectResponse):
             if not knx_message.ERROR:
                 if not self.tunnel_established:
