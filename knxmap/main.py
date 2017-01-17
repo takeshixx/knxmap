@@ -3,8 +3,10 @@ import sys
 import os
 import argparse
 import logging
+import functools
 
 from knxmap import KnxMap, Targets, KnxTargets
+from knxmap.misc import TRACE_LOG_LEVEL, trace_packet, trace_incoming, trace_outgoing
 
 # asyncio requires at least Python 3.3
 if sys.version_info.major < 3 or \
@@ -19,6 +21,7 @@ try:
 except ImportError:
     print('Please install the asyncio module!')
     sys.exit(1)
+
 
 LOGGER = logging.getLogger(__name__)
 ARGS = argparse.ArgumentParser(

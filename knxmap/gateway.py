@@ -3,8 +3,9 @@ import asyncio
 import logging
 
 from knxmap.data.constants import *
-from knxmap.messages import parse_message, KnxSearchRequest, KnxSearchResponse, \
-                            KnxDescriptionRequest, KnxDescriptionResponse
+from knxmap.messages import parse_message, KnxSearchRequest, KnxSearchResponse, KnxDescriptionRequest, \
+                            KnxDescriptionResponse, KnxRemoteDiagnosticRequest, \
+                            KnxRemoteDiagnosticResponse
 
 __all__ = ['KnxGatewaySearch',
            'KnxGatewayDescription']
@@ -66,7 +67,10 @@ class KnxGatewayDescription(asyncio.DatagramProtocol):
         self.wait.cancel()
         self.transport.close()
         knx_message = parse_message(data)
-        if knx_message and isinstance(knx_message, KnxDescriptionResponse):
-            self.future.set_result(knx_message)
-        else:
-            self.future.set_result(False)
+        if knx_message:
+            knx_message.set_peer(addr)
+            LOGGER.trace_incoming(knx_message)
+            if isinstance(knx_message, KnxDescriptionResponse):
+                self.future.set_result(knx_message)
+            else:
+                self.future.set_result(False)

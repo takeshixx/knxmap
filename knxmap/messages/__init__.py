@@ -3,13 +3,18 @@ import logging
 
 from knxmap import KNX_MESSAGE_TYPES
 from knxmap.messages.main import KnxMessage
-from knxmap.messages.cemi import KnxCemiFrame
+from knxmap.messages.tpci import Tpci
+from knxmap.messages.apci import Apci
+from knxmap.messages.cemi import CemiFrame
+from knxmap.messages.emi1 import KnxEmi1Frame
+from knxmap.messages.tp import DataRequest, ExtendedDataRequest
 from knxmap.messages.configuration import KnxDeviceConfigurationRequest, KnxDeviceConfigurationAck
 from knxmap.messages.core import KnxSearchRequest, KnxSearchResponse, KnxDescriptionRequest, \
     KnxDescriptionResponse, KnxConnectRequest, KnxConnectResponse, KnxConnectionStateRequest, \
     KnxConnectionStateResponse, KnxDisconnectRequest, KnxDisconnectResponse
 from knxmap.messages.tunnelling import KnxTunnellingRequest, KnxTunnellingAck
 from knxmap.messages.routing import KnxRoutingIndication, KnxRoutingLostMessage, KnxRoutingBusy
+from knxmap.messages.remconf import KnxRemoteDiagnosticRequest, KnxRemoteDiagnosticResponse
 
 LOGGER = logging.getLogger(__name__)
 

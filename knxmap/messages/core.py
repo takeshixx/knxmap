@@ -4,7 +4,7 @@ import struct
 import logging
 
 from knxmap import KNX_MESSAGE_TYPES, _LAYER_TYPES, KNX_STATUS_CODES
-from knxmap.messages.main import KnxMessage
+from .main import KnxMessage
 
 LOGGER = logging.getLogger(__name__)
 
@@ -13,6 +13,7 @@ class KnxSearchRequest(KnxMessage):
     def __init__(self, message=None, sockname=None):
         super(KnxSearchRequest, self).__init__()
         if message:
+            self.message = message
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = KNX_MESSAGE_TYPES.get('SEARCH_REQUEST')
@@ -39,6 +40,7 @@ class KnxSearchResponse(KnxMessage):
     def __init__(self, message=None):
         super(KnxSearchResponse, self).__init__()
         if message:
+            self.message = message
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = KNX_MESSAGE_TYPES.get('SEARCH_RESPONSE')
@@ -61,6 +63,7 @@ class KnxDescriptionRequest(KnxMessage):
     def __init__(self, message=None, sockname=None):
         super(KnxDescriptionRequest, self).__init__()
         if message:
+            self.message = message
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = KNX_MESSAGE_TYPES.get('DESCRIPTION_REQUEST')
@@ -87,6 +90,7 @@ class KnxDescriptionResponse(KnxMessage):
     def __init__(self, message=None):
         super(KnxDescriptionResponse, self).__init__()
         if message:
+            self.message = message
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = KNX_MESSAGE_TYPES.get('DESCRIPTION_RESPONSE')
@@ -109,6 +113,7 @@ class KnxConnectRequest(KnxMessage):
                  connection_type=0x04):
         super(KnxConnectRequest, self).__init__()
         if message:
+            self.message = message
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = KNX_MESSAGE_TYPES.get('CONNECT_REQUEST')
@@ -161,6 +166,7 @@ class KnxConnectResponse(KnxMessage):
         self.ERROR = None
         self.ERROR_CODE = None
         if message:
+            self.message = message
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = KNX_MESSAGE_TYPES.get('CONNECT_RESPONSE')
@@ -196,6 +202,7 @@ class KnxConnectionStateRequest(KnxMessage):
     def __init__(self, message=None, sockname=None, communication_channel=None):
         super(KnxConnectionStateRequest, self).__init__()
         if message:
+            self.message = message
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = KNX_MESSAGE_TYPES.get('CONNECTIONSTATE_REQUEST')
@@ -229,6 +236,7 @@ class KnxConnectionStateResponse(KnxMessage):
     def __init__(self, message=None, communication_channel=None):
         super(KnxConnectionStateResponse, self).__init__()
         if message:
+            self.message = message
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = KNX_MESSAGE_TYPES.get('CONNECTIONSTATE_RESPONSE')
@@ -254,6 +262,7 @@ class KnxDisconnectRequest(KnxMessage):
     def __init__(self, message=None, sockname=None, communication_channel=None):
         super(KnxDisconnectRequest, self).__init__()
         if message:
+            self.message = message
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = KNX_MESSAGE_TYPES.get('DISCONNECT_REQUEST')
@@ -287,6 +296,7 @@ class KnxDisconnectResponse(KnxMessage):
     def __init__(self, message=None, communication_channel=None):
         super(KnxDisconnectResponse, self).__init__()
         if message:
+            self.message = message
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = KNX_MESSAGE_TYPES.get('DISCONNECT_RESPONSE')

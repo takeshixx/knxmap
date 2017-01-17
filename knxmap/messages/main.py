@@ -4,7 +4,8 @@ import socket
 import struct
 
 from knxmap import KNX_CONSTANTS
-from knxmap.messages.cemi import KnxCemiFrame
+#from knxmap.messages import CemiFrame
+from .cemi import CemiFrame
 
 LOGGER = logging.getLogger(__name__)
 
@@ -23,7 +24,18 @@ class KnxMessage(object):
         self.port = None
         self.knx_source = None
         self.knx_destination = None
-        self.cemi_message_code = None
+        self.message_code = None
+
+    def __repr__(self):
+        _repr = '%s source: %s, port: %s' % (
+            self.__class__.__name__,
+            self.source,
+            self.port)
+        if self.knx_source:
+            _repr += ', knx_source: %s' % KnxMessage.parse_knx_address(self.knx_source)
+        if self.knx_destination:
+            _repr += ', knx_destination: %s' % KnxMessage.parse_knx_address(self.knx_destination)
+        return _repr
 
     @staticmethod
     def parse_knx_address(address):
@@ -218,7 +230,7 @@ class KnxMessage(object):
         dib_dev_info['structure_length'] = self._unpack_stream('!B', message)
         dib_dev_info['description_type'] = self._unpack_stream('!B', message)
         dib_dev_info['knx_medium'] = self._unpack_stream('!B', message)
-        dib_dev_info['device_status'] = KnxCemiFrame.unpack_cemi_runstate(self._unpack_stream('!B', message))
+        dib_dev_info['device_status'] = CemiFrame.unpack_cemi_runstate(self._unpack_stream('!B', message))
         dib_dev_info['knx_address'] = self.parse_knx_address(self._unpack_stream('!H', message))
         dib_dev_info['project_install_identifier'] = self._unpack_stream('!H', message)
         dib_dev_info['knx_device_serial'] = self.parse_knx_device_serial(

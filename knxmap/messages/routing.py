@@ -4,7 +4,7 @@ import struct
 import logging
 
 from knxmap import KNX_MESSAGE_TYPES
-from knxmap.messages.main import KnxMessage
+from .main import KnxMessage
 
 LOGGER = logging.getLogger(__name__)
 
@@ -13,6 +13,7 @@ class KnxRoutingIndication(KnxMessage):
     def __init__(self, message=None, knx_source='0.0.0', knx_destination=None):
         super(KnxRoutingIndication, self).__init__()
         if message:
+            self.message = message
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = KNX_MESSAGE_TYPES.get('ROUTING_INDICATION')
@@ -41,6 +42,7 @@ class KnxRoutingLostMessage(KnxMessage):
     def __init__(self, message=None):
         super(KnxRoutingLostMessage, self).__init__()
         if message:
+            self.message = message
             self.unpack_knx_message(message)
         else:
             self.header['service_tye'] = KNX_MESSAGE_TYPES.get('ROUTING_LOST_MESSAGE')
@@ -66,6 +68,7 @@ class KnxRoutingBusy(KnxMessage):
     def __init__(self, message=None):
         super(KnxRoutingBusy, self).__init__()
         if message:
+            self.message = message
             self.unpack_knx_message(message)
         else:
             self.header['service_type'] = KNX_MESSAGE_TYPES.get('ROUTING_BUSY')

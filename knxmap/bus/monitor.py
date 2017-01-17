@@ -12,13 +12,8 @@ LOGGER = logging.getLogger(__name__)
 class KnxBusMonitor(KnxTunnelConnection):
     """Implementation of bus_monitor_mode and group_monitor_mode."""
     def __init__(self, future, loop=None, group_monitor=True):
-        self.future = future
-        self.loop = loop or asyncio.get_event_loop()
-        self.transport = None
+        super(KnxBusMonitor, self).__init__(future, loop=loop)
         self.group_monitor = group_monitor
-        self.tunnel_established = False
-        self.communication_channel = None
-        self.sequence_count = 0
 
     def connection_made(self, transport):
         self.transport = transport
@@ -59,16 +54,17 @@ class KnxBusMonitor(KnxTunnelConnection):
                 self.future.set_result(None)
         elif isinstance(knx_message, KnxTunnellingRequest):
             self.print_message(knx_message)
-            if CEMI_PRIMITIVES[knx_message.body.get('cemi').get('message_code')] == 'L_Data.con' or \
-                    CEMI_PRIMITIVES[knx_message.body.get('cemi').get('message_code')] == 'L_Data.ind':
+            if CEMI_PRIMITIVES[knx_message.cemi.message_code] == 'L_Data.con' or \
+                    CEMI_PRIMITIVES[knx_message.cemi.message_code] == 'L_Data.ind':
                 tunnelling_ack = KnxTunnellingAck(
                     communication_channel=knx_message.body.get('communication_channel_id'),
                     sequence_count=knx_message.body.get('sequence_counter'))
+                LOGGER.trace_outgoing(tunnelling_ack)
                 self.transport.sendto(tunnelling_ack.get_message())
         elif isinstance(knx_message, KnxTunnellingAck):
             self.print_message(knx_message)
         elif isinstance(knx_message, KnxConnectionStateResponse):
-            # After receiving a CONNECTIONSTATE_RESPONSE shedule the next one
+            # After receiving a CONNECTIONSTATE_RESPONSE schedule the next one
             self.loop.call_later(50, self.knx_keep_alive)
         elif isinstance(knx_message, KnxDisconnectRequest):
             connect_response = KnxDisconnectResponse(communication_channel=self.communication_channel)
@@ -80,37 +76,36 @@ class KnxBusMonitor(KnxTunnelConnection):
             self.future.set_result(None)
 
     def print_message(self, message):
-        """A generic message printing function. It defines a format for the monitoring modes."""
+        """A generic message printing function. It defines
+        a format for the monitoring modes."""
         assert isinstance(message, KnxTunnellingRequest)
         cemi = tpci = apci= {}
-        if message.body.get('cemi'):
-            cemi = message.body.get('cemi')
-            if cemi.get('tpci'):
-                tpci = cemi.get('tpci')
-                if tpci.get('apci'):
-                    apci = tpci.get('apci')
-        if cemi.get('controlfield_2')and cemi.get('controlfield_2').get('address_type'):
-            dst_addr = message.parse_knx_group_address(cemi.get('knx_destination'))
+        if message.cemi:
+            cemi = message.cemi
+            if cemi.tpci:
+                tpci = cemi.tpci
+                if cemi.apci:
+                    apci = cemi.apci
+        if cemi.extended_control_field and cemi.extended_control_field.get('address_type'):
+            dst_addr = message.parse_knx_group_address(cemi.knx_destination)
         else:
-            dst_addr = message.parse_knx_address(cemi.get('knx_destination'))
+            dst_addr = message.parse_knx_address(cemi.knx_destination)
         if self.group_monitor:
             format = ('[ chan_id: {chan_id}, seq_no: {seq_no}, message_code: {msg_code}, '
                       'source_addr: {src_addr}, dest_addr: {dst_addr}, tpci_type: {tpci_type}, '
                       'tpci_seq: {tpci_seq}, apci_type: {apci_type}, apci_data: {apci_data} ]').format(
                 chan_id=message.body.get('communication_channel_id'),
                 seq_no=message.body.get('sequence_counter'),
-                msg_code=CEMI_PRIMITIVES[cemi.get('message_code')],
-                src_addr=message.parse_knx_address(cemi.get('knx_source')),
+                msg_code=CEMI_PRIMITIVES[cemi.message_code],
+                src_addr=message.parse_knx_address(cemi.knx_source),
                 dst_addr=dst_addr,
-                tpci_type=_CEMI_TPCI_TYPES.get(tpci.get('type')),
-                tpci_seq=tpci.get('sequence'),
-                apci_type=_CEMI_APCI_TYPES.get(apci.get('type')),
-                apci_data=apci.get('data'))
+                tpci_type=_CEMI_TPCI_TYPES.get(tpci.tpci_type),
+                tpci_seq=tpci.sequence,
+                apci_type=_CEMI_APCI_TYPES.get(apci.apci_type),
+                apci_data=apci.apci_data)
         else:
-            format = ('[ chan_id: {chan_id}, seq_no: {seq_no}, message_code: {msg_code}, '
-                      'raw_frame: {raw_frame} ]').format(
+            format = ('[ chan_id: {chan_id}, seq_no: {seq_no}, message_code: {msg_code} ]').format(
                 chan_id=message.body.get('communication_channel_id'),
                 seq_no=message.body.get('sequence_counter'),
-                msg_code=CEMI_PRIMITIVES[cemi.get('message_code')],
-                raw_frame=cemi.get('raw_frame'))
+                msg_code=CEMI_PRIMITIVES[cemi.message_code])
         LOGGER.info(format)

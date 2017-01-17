@@ -155,31 +155,36 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
 
     def handle_configuration_services(self, knx_msg):
         if isinstance(knx_msg, KnxDeviceConfigurationRequest):
+            cemi_msg_code = knx_msg.message_code
+            if cemi_msg_code == CEMI_MSG_CODES.get('M_PropRead.con'):
+                if knx_msg.num_elements == 0:
+                    if knx_msg.data:
+                        LOGGER.error(CEMI_ERROR_CODES.get(knx_msg.data[0]))
+                    else:
+                        LOGGER.error('An unknown error occured')
+                    self.process_target(knx_msg.source, False, knx_msg)
+                else:
+                    self.process_target(knx_msg.source, knx_msg)
             conf_ack = KnxDeviceConfigurationAck(
-                communication_channel=knx_msg.body.get('communication_channel_id'),
-                sequence_count=knx_msg.body.get('sequence_counter'))
+                communication_channel=knx_msg.communication_channel,
+                sequence_count=knx_msg.sequence_count)
+            LOGGER.trace_outgoing(conf_ack)
             self.transport.sendto(conf_ack.get_message())
+        elif isinstance(knx_msg, KnxDeviceConfigurationAck):
+            # TODO: is there anything to do with an ACK?
+            pass
         else:
             LOGGER.error('Unknown Configuration Message: {}'.format(knx_msg.header.get('service_type')))
 
     def handle_tunnel_services(self, knx_msg):
         if isinstance(knx_msg, KnxTunnellingRequest):
-            knx_src = knx_msg.parse_knx_address(knx_msg.body.get('cemi').get('knx_source'))
-            knx_dst = knx_msg.parse_knx_address(knx_msg.body.get('cemi').get('knx_destination'))
-            cemi_msg_code = knx_msg.body.get('cemi').get('message_code')
-            cemi_tpci_type = knx_msg.body.get('cemi').get('tpci').get('type')
+            knx_src = knx_msg.parse_knx_address(knx_msg.cemi.knx_source)
+            knx_dst = knx_msg.parse_knx_address(knx_msg.cemi.knx_destination)
+            cemi_msg_code = knx_msg.cemi.message_code
+            cemi_tpci_type = knx_msg.cemi.tpci.tpci_type
             cemi_apci_type = None
-            if knx_msg.body.get('cemi').get('apci'):
-                cemi_apci_type = knx_msg.body.get('cemi').get('apci').get('type')
-
-            LOGGER.debug(('[KnxTunnellingRequest] SRC: {knx_src}, DST: {knx_dst}, CODE: {msg_code}, '
-                          'SEQ: {seq}. TPCI: {tpci}, APCI: {apci}').format(
-                knx_src=knx_src,
-                knx_dst=knx_dst,
-                msg_code=_CEMI_MSG_CODES.get(cemi_msg_code),
-                seq=knx_msg.body.get('cemi').get('tpci').get('sequence'),
-                tpci=_CEMI_TPCI_TYPES.get(cemi_tpci_type),
-                apci=_CEMI_APCI_TYPES.get(cemi_apci_type)))
+            if knx_msg.cemi.apci:
+                cemi_apci_type = knx_msg.cemi.apci.apci_type
 
             if cemi_msg_code == CEMI_MSG_CODES.get('L_Data.con'):
                 # TODO: is this for NCD's even necessary?
@@ -189,7 +194,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                     # value should be boolean to indicate that either a
                     # address is not in use/device is not available (UCD)
                     # or an error happened (NCD).
-                    if knx_msg.body.get('cemi').get('controlfield_1').get('confirm'):
+                    if knx_msg.cemi.control_field.get('confirm'):
                         # If the confirm flag is set, the device is not alive
                         self.process_target(knx_dst, False, knx_msg)
                     else:
@@ -224,8 +229,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             elif cemi_msg_code == CEMI_MSG_CODES.get('L_Data.ind'):
 
                 if cemi_tpci_type == CEMI_TPCI_TYPES.get('UCD'):
-
-                    if knx_msg.body.get('cemi').get('tpci').get('status') is 1:
+                    if knx_msg.cemi.tpci.status is 1:
                         # TODO: why checking status here? pls document why
                         if knx_dst in self.target_futures.keys():
                             if not self.target_futures[knx_dst].done():
@@ -233,7 +237,6 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                                 del self.target_futures[knx_dst]
                         else:
                             self.response_queue.append(knx_msg)
-
                 elif cemi_tpci_type == CEMI_TPCI_TYPES.get('NCD'):
                     # If we sent e.g. a A_DeviceDescriptor_Read, this
                     # would arrive right before the actual data.
@@ -245,25 +248,22 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                     if cemi_apci_type == CEMI_APCI_TYPES.get('A_DeviceDescriptor_Response'):
                         LOGGER.debug('{knx_src}: DEVICEDESCRIPTOR_RESPONSE DATA: {data}'.format(
                             knx_src=knx_src,
-                            data=knx_msg.body.get('cemi').get('data')))
-
+                            data=knx_msg.cemi.data))
                     elif cemi_apci_type == CEMI_APCI_TYPES.get('A_Authorize_Response'):
                         LOGGER.debug('{knx_src}: AUTHORIZE_RESPONSE DATA: {data}'.format(
                             knx_src=knx_src,
-                            data=knx_msg.body.get('cemi').get('data')))
-
+                            data=knx_msg.cemi.data))
                     elif cemi_apci_type == CEMI_APCI_TYPES.get('A_PropertyValue_Response'):
                         LOGGER.debug('{peer}/{knx_source}/{knx_dest}: PROPERTY_VALUE_RESPONSE DATA: {data}'.format(
                             peer=self.peername[0],
                             knx_source=knx_src,
                             knx_dest=knx_dst,
-                            data=knx_msg.body.get('cemi').get('data')[4:]))
-
+                            data=knx_msg.cemi.data[4:]))
                     elif cemi_apci_type == CEMI_APCI_TYPES.get('A_Memory_Response'):
                         LOGGER.debug('{peer}/{knx_src}: MEMORY_RESPONSE DATA: {data}'.format(
                             peer=self.peername[0],
                             knx_src=knx_src,
-                            data=knx_msg.body.get('cemi').get('data')))
+                            data=knx_msg.cemi.data))
 
                     # If we receive any Numbered Data Packets for
                     # targets without futures, add the knx_source
@@ -395,13 +395,14 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         tunnel_request = self.make_tunnel_request(target)
         tunnel_request.apci_device_descriptor_read(
             sequence=self.tpci_seq_counts.get(target))
+        LOGGER.trace_outgoing(tunnel_request)
         value = yield from self.send_data(tunnel_request.get_message(), target)
         yield from self.tpci_send_ncd(target)
         if isinstance(value, KnxTunnellingRequest):
-            cemi = value.body.get('cemi')
-            if cemi.get('apci').get('type') == CEMI_APCI_TYPES.get('A_DeviceDescriptor_Response') and \
-                    cemi.get('data'):
-                return value.body.get('cemi').get('data')
+            cemi = value.cemi
+            if cemi.apci.apci_type == CEMI_APCI_TYPES.get('A_DeviceDescriptor_Response') and \
+                    cemi.data:
+                return value.cemi.data
         else:
             return False
 
@@ -415,11 +416,12 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             property_id=property_id,
             num_elements=num_elements,
             start_index=start_index)
+        LOGGER.trace_outgoing(tunnel_request)
         value = yield from self.send_data(tunnel_request.get_message(), target)
         yield from self.tpci_send_ncd(target)
         if isinstance(value, KnxTunnellingRequest) and \
-                value.body.get('cemi').get('data'):
-            return value.body.get('cemi').get('data')[4:]
+                value.cemi.data:
+            return value.cemi.data[4:]
         else:
             return False
 
@@ -433,11 +435,12 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             property_id=property_id,
             num_elements=num_elements,
             start_index=start_index)
+        LOGGER.trace_outgoing(tunnel_request)
         value = yield from self.send_data(tunnel_request.get_message(), target)
         yield from self.tpci_send_ncd(target)
         if isinstance(value, KnxTunnellingRequest) and \
-                value.body.get('cemi').get('data'):
-            return value.body.get('cemi').get('data')[4:]
+                value.cemi.data:
+            return value.cemi.data[4:]
         else:
             return False
 
@@ -448,11 +451,12 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             sequence=self.tpci_seq_counts.get(target),
             memory_address=memory_address,
             read_count=read_count)
+        LOGGER.trace_outgoing(tunnel_request)
         value = yield from self.send_data(tunnel_request.get_message(), target)
         yield from self.tpci_send_ncd(target)
         if isinstance(value, KnxTunnellingRequest) and \
-                value.body.get('cemi').get('data'):
-            return value.body.get('cemi').get('data')[2:]
+                value.cemi.data:
+            return value.cemi.data[2:]
         else:
             return False
 
@@ -465,11 +469,12 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             memory_address=memory_address,
             write_count=write_count,
             data=data)
+        LOGGER.trace_outgoing(tunnel_request)
         value = yield from self.send_data(tunnel_request.get_message(), target)
         yield from self.tpci_send_ncd(target)
         if isinstance(value, KnxTunnellingRequest) and \
-                value.body.get('cemi').get('data'):
-            return value.body.get('cemi').get('data')[2:]
+                value.cemi.data:
+            return value.cemi.data[2:]
         else:
             return False
 
@@ -480,11 +485,12 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             sequence=self.tpci_seq_counts.get(target),
             level=level,
             key=key)
+        LOGGER.trace_outgoing(tunnel_request)
         value = yield from self.send_data(tunnel_request.get_message(), target)
         yield from self.tpci_send_ncd(target)
         if isinstance(value, KnxTunnellingRequest) and \
-                value.body.get('cemi').get('data'):
-            return value.body.get('cemi').get('data')[2:]
+                value.cemi.data:
+            return value.cemi.data[2:]
         else:
             return False
 
@@ -497,10 +503,11 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         tunnel_request.apci_authorize_request(
             sequence=self.tpci_seq_counts.get(target),
             key=key)
+        LOGGER.trace_outgoing(tunnel_request)
         auth = yield from self.send_data(tunnel_request.get_message(), target)
         yield from self.tpci_send_ncd(target)
         if isinstance(auth, KnxTunnellingRequest):
-            return int.from_bytes(auth.body.get('cemi').get('data'), 'big')
+            return int.from_bytes(auth.cemi.data, 'big')
         else:
             return False
 
@@ -508,10 +515,11 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
     def apci_group_value_write(self, target, value=0):
         tunnel_request = self.make_tunnel_request(target)
         tunnel_request.apci_group_value_write(value=value)
+        LOGGER.trace_outgoing(tunnel_request)
         value = yield from self.send_data(tunnel_request.get_message(), target)
         if isinstance(value, KnxTunnellingRequest) and \
-                value.body.get('cemi').get('data'):
-            return value.body.get('cemi').get('data')[4:]
+                value.cemi.data:
+            return value.cemi.data[4:]
         else:
             return False
 
@@ -520,11 +528,12 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         tunnel_request = self.make_tunnel_request(target)
         tunnel_request.apci_individual_address_read(
             sequence=self.tpci_seq_counts.get(target))
+        LOGGER.trace_outgoing(tunnel_request)
         value = yield from self.send_data(tunnel_request.get_message(), target)
         yield from self.tpci_send_ncd(target)
         if isinstance(value, KnxTunnellingRequest) and \
-                value.body.get('cemi').get('data'):
-            return value.body.get('cemi').get('data')[4:]
+                value.cemi.data:
+            return value.cemi.data[4:]
         else:
             return False
 
@@ -533,11 +542,12 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         tunnel_request = self.make_tunnel_request(target)
         tunnel_request.apci_user_manufacturer_info_read(
             sequence=self.tpci_seq_counts.get(target))
+        LOGGER.trace_outgoing(tunnel_request)
         value = yield from self.send_data(tunnel_request.get_message(), target)
         yield from self.tpci_send_ncd(target)
         if isinstance(value, KnxTunnellingRequest) and \
-                value.body.get('cemi').get('data'):
-            return value.body.get('cemi').get('data')[4:]
+                value.cemi.data:
+            return value.cemi.data[4:]
         else:
             return False
 
