@@ -1,4 +1,6 @@
+import json
 import socket
+import collections
 
 def parse_knx_address(address):
     """Parse physical/individual KNX address.
@@ -85,3 +87,31 @@ def parse_device_descriptor(desc):
 
 def unpack_ip_address(address):
     return socket.inet_aton(address)
+
+
+def get_manufacturer_by_id(mid):
+    assert isinstance(mid, int)
+    m = json.load(open('knxmap/data/manufacturers.json'))
+    for _m in m.get('manufacturers'):
+        if int(_m.get('knx_manufacturer_id')) == mid:
+            return _m.get('name')
+
+
+def make_runstate_printable(runstate):
+    _runstate = collections.OrderedDict()
+    for k, v in runstate.items():
+        if k == 'PROG_MODE':
+            _runstate['Programming Mode'] = 'ENABLED' if v else 'disabled'
+        elif k == 'LINK_LAYER':
+            _runstate['Link Layer'] = 'ENABLED' if v else 'disabled'
+        elif k == 'TRANSPORT_LAYER':
+            _runstate['Transport Layer'] = 'ENABLED' if v else 'disabled'
+        elif k == 'APP_LAYER':
+            _runstate['Application Layer'] = 'ENABLED' if v else 'disabled'
+        elif k == 'SERIAL_INTERFACE':
+            _runstate['Serial Interface'] = 'ENABLED' if v else 'disabled'
+        elif k == 'USER_APP':
+            _runstate['User Application'] = 'ENABLED' if v else 'disabled'
+        elif k == 'BC_DM':
+            _runstate['BC DM'] = v
+    return _runstate

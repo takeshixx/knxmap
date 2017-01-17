@@ -7,7 +7,7 @@ import socket
 import struct
 import time
 
-from knxmap.misc import get_manufacturer_by_id
+from knxmap.utils import get_manufacturer_by_id
 
 try:
     # Python 3.4
