@@ -288,13 +288,13 @@ class KnxMap(object):
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.setblocking(0)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, struct.pack('256s', str.encode(self.iface)))
-
-            protocol = KnxGatewaySearch()
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE,
+                            struct.pack('256s', str.encode(self.iface)))
+            protocol = KnxGatewaySearch(multicast_addr=self.multicast_addr,
+                                        port=self.port)
             waiter = asyncio.Future(loop=self.loop)
             transport = self.loop._make_datagram_transport(
-                sock, protocol, ('224.0.23.12', 3671), waiter)
-
+                sock, protocol, (self.multicast_addr, self.port), waiter)
             try:
                 # Wait until connection_made() has been called on the transport
                 yield from waiter
@@ -307,6 +307,12 @@ class KnxMap(object):
             yield from asyncio.sleep(self.search_timeout)
 
             if protocol.responses:
+                if True:
+                    # TODO: check if we want diagnostic requests as well
+                    print('sending diagnostic request')
+                    protocol.send_diagnostic_request()
+                    yield from asyncio.sleep(self.search_timeout)
+
                 # If protocol received SEARCH_RESPONSE packets, print them
                 for response in protocol.responses:
                     peer = response[0]
@@ -432,8 +438,11 @@ class KnxMap(object):
             LOGGER.debug('Starting bus monitor')
 
     @asyncio.coroutine
-    def search(self, search_timeout=5, iface=None):
+    def search(self, search_timeout=5, iface=None, multicast_addr='224.0.23.12',
+               port=3671):
         self.iface = iface
+        self.multicast_addr = multicast_addr
+        self.port = port
         self.search_timeout = search_timeout
         LOGGER.info('Make sure there are no filtering rules that drop UDP multicast packets!')
         yield from self.search_gateways()

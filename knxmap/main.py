@@ -80,6 +80,9 @@ pscan.add_argument(
 
 psearch = SUBARGS.add_parser('search',
                              help='search for KNXnet/IP gateways on the local network')
+ARGS.add_argument(
+    '--multicast', action='store', dest='multicast_addr',
+    default='224.0.23.12', help='multicast address for search requests')
 psearch.add_argument(
     '--search-timeout', action='store', dest='search_timeout', type=int,
     default=5, help='timeout (in seconds) for multicast responses')
@@ -192,7 +195,9 @@ def main():
                 sys.exit(1)
             loop.run_until_complete(knxmap.search(
                 search_timeout=args.search_timeout,
-                iface=args.iface))
+                iface=args.iface,
+                multicast_addr=args.multicast_addr,
+                port=args.port))
         elif args.cmd == 'apci':
             loop.run_until_complete(knxmap.apci(
                 target=args.device,

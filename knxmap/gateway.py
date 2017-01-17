@@ -17,26 +17,41 @@ class KnxGatewaySearch(asyncio.DatagramProtocol):
     """A protocol implementation for searching KNXnet/IP gateways via
     multicast messages. The protocol will hold a set responses with
     all the KNXnet/IP gateway responses."""
-    def __init__(self, loop=None):
+    def __init__(self, loop=None, multicast_addr=KNX_CONSTANTS.get('MULTICAST_ADDR'),
+                 port=KNX_CONSTANTS.get('DEFAULT_PORT')):
         self.loop = loop or asyncio.get_event_loop()
+        self.multicast_addr = multicast_addr
+        self.port = port
         self.transport = None
         self.peername = None
         self.sockname = None
         self.responses = set()
+        self.diagnostic_responses = set()
 
     def connection_made(self, transport):
         self.transport = transport
         self.peername = self.transport.get_extra_info('peername')
         self.sockname = self.transport.get_extra_info('sockname')
         packet = KnxSearchRequest(sockname=self.sockname)
-        self.transport.get_extra_info('socket').sendto(packet.get_message(),
-                                                       (KNX_CONSTANTS.get('MULTICAST_ADDR'),
-                                                        KNX_CONSTANTS.get('DEFAULT_PORT')))
+        LOGGER.trace_outgoing(packet)
+        packet = packet.get_message()
+        self.transport.get_extra_info('socket').sendto(packet, (self.multicast_addr, self.port))
 
     def datagram_received(self, data, addr):
         knx_message = parse_message(data)
-        if knx_message and isinstance(knx_message, KnxSearchResponse):
-            self.responses.add((addr, knx_message))
+        if knx_message:
+            knx_message.set_peer(addr)
+            LOGGER.trace_incoming(knx_message)
+            if isinstance(knx_message, KnxSearchResponse):
+                self.responses.add((addr, knx_message))
+            elif isinstance(knx_message, KnxRemoteDiagnosticResponse):
+                self.diagnostic_responses.add((addr, knx_message))
+
+    def send_diagnostic_request(self, selector=None):
+        packet = KnxRemoteDiagnosticRequest(sockname=self.sockname)
+        LOGGER.trace_outgoing(packet)
+        packet = packet.get_message()
+        self.transport.get_extra_info('socket').sendto(packet, (self.multicast_addr, self.port))
 
 
 class KnxGatewayDescription(asyncio.DatagramProtocol):
