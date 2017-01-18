@@ -49,6 +49,9 @@ ARGS.add_argument(
     '--workers', action='store', type=int, metavar='N',
     default=30, help='count of concurrent workers')
 ARGS.add_argument(
+    '--connections', action='store', type=int, metavar='N', default=0,
+    help='count of concurrent tunnel connections (0 means as much as a device supports)')
+ARGS.add_argument(
     '--timeout', action='store', dest='timeout', type=int,
     default=2, help='timeout (in seconds) for unicast description responses')
 ARGS.add_argument(
@@ -181,9 +184,11 @@ def main():
         targets = Targets(args.targets, args.port)
         knxmap = KnxMap(targets=targets.targets,
                         max_workers=args.workers,
+                        max_connections=args.connections,
                         medium=args.medium)
     else:
         knxmap = KnxMap(max_workers=args.workers,
+                        max_connections=args.connections,
                         medium=args.medium)
     try:
         if args.cmd == 'search':

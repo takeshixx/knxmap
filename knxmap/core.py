@@ -7,8 +7,6 @@ import socket
 import struct
 import time
 
-from knxmap.utils import get_manufacturer_by_id
-
 try:
     # Python 3.4
     from asyncio import JoinableQueue as Queue
@@ -16,26 +14,30 @@ except ImportError:
     # Python 3.5 renamed it to Queue
     from asyncio import Queue
 
+import knxmap.utils
 from knxmap.data.constants import *
-from knxmap.messages import KnxMessage, KnxCemiFrame, KnxDescriptionResponse
+from knxmap.messages import CemiFrame, KnxDescriptionResponse, DataRequest
 from knxmap.gateway import *
-from knxmap.data.manufacturers import *
 from knxmap.targets import *
 from knxmap.bus.tunnel import KnxTunnelConnection
 from knxmap.bus.router import KnxRoutingConnection
 from knxmap.bus.monitor import KnxBusMonitor
 
-__all__ = ['KnxMap']
-
 LOGGER = logging.getLogger(__name__)
 
 
 class KnxMap(object):
-    """The main scanner instance that takes care of scheduling workers for the targets."""
-    def __init__(self, targets=None, max_workers=100, loop=None):
+    """The main scanner instance that takes care of scheduling
+    workers for the targets."""
+    def __init__(self, targets=None, max_workers=100, max_connections=0,
+                 loop=None, medium='net'):
         self.loop = loop or asyncio.get_event_loop()
-        # The number of concurrent workers for discovering KNXnet/IP gateways
+        # The number of concurrent workers
+        # for discovering KNXnet/IP gateways
         self.max_workers = max_workers
+        # The number of concurrent tunnel connection
+        # (0 means use as much as a device supports)
+        self.max_connections = max_connections
         # q contains all KNXnet/IP gateways
         self.q = Queue(loop=self.loop)
         # bus_queues is a dict containing a bus queue for each KNXnet/IP gateway
@@ -53,6 +55,8 @@ class KnxMap(object):
         self.desc_timeout = None
         self.desc_retries = None
         self.knx_source = None
+        self.medium = medium
+        self.bus_connections = collections.OrderedDict()
         if targets:
             self.set_targets(targets)
         else:
@@ -96,8 +100,13 @@ class KnxMap(object):
                 break
 
     @asyncio.coroutine
-    def knx_bus_worker(self, transport, protocol, queue):
+    def knx_bus_worker(self, transport, protocol, knx_gateway=None, queue=None):
         """A worker for communicating with devices on the bus."""
+        if not queue and not knx_gateway:
+            LOGGER.error('No target queue available')
+            return
+        elif not queue and knx_gateway:
+            queue = self.bus_queues.get(knx_gateway.host)
         try:
             while True:
                 target = queue.get_nowait()
@@ -131,16 +140,16 @@ class KnxMap(object):
                         continue
 
                     dev_desc = struct.unpack('!H', descriptor)[0]
-                    desc_medium, desc_type, desc_version = KnxMessage.parse_device_descriptor(dev_desc)
+                    desc_medium, desc_type, desc_version = knxmap.utils.parse_device_descriptor(dev_desc)
 
                     if desc_type > 1:
                         # Read System 2 and System 7 manufacturer ID object
                         manufacturer = yield from protocol.apci_property_value_read(
                             target,
                             property_id=DEVICE_OBJECTS.get('PID_MANUFACTURER_ID'))
-                        if isinstance(manufacturer, (str, bytes)):
+                        if isinstance(manufacturer, (str, bytes, bytearray)):
                             manufacturer = int.from_bytes(manufacturer, 'big')
-                            manufacturer = get_manufacturer_by_id(manufacturer)
+                            manufacturer = knxmap.utils.get_manufacturer_by_id(manufacturer)
 
                         # Read the device state
                         device_state = yield from protocol.apci_memory_read(
@@ -154,7 +163,7 @@ class KnxMap(object):
                         serial = yield from protocol.apci_property_value_read(
                             target,
                             property_id=DEVICE_OBJECTS.get('PID_SERIAL_NUMBER'))
-                        if isinstance(serial, (str, bytes)):
+                        if isinstance(serial, (str, bytes, bytearray)):
                             serial = codecs.encode(serial, 'hex').decode().upper()
 
                         for object_index, props in OBJECTS.items():
@@ -177,9 +186,9 @@ class KnxMap(object):
                             target,
                             memory_address=0x0104,
                             read_count=1)
-                        if isinstance(manufacturer, (str, bytes)):
+                        if isinstance(manufacturer, (str, bytes, bytearray)):
                             manufacturer = int.from_bytes(manufacturer, 'big')
-                            manufacturer = get_manufacturer_by_id(manufacturer)
+                            manufacturer = knxmap.utils.get_manufacturer_by_id(manufacturer)
 
                         device_state = yield from protocol.apci_memory_read(
                             target,
@@ -254,9 +263,12 @@ class KnxMap(object):
             pass
 
     @asyncio.coroutine
-    def bus_scan(self, knx_gateway, bus_targets):
-        queue = self.add_bus_queue(knx_gateway.host, bus_targets)
-        LOGGER.info('Scanning {} bus device(s) on {}'.format(queue.qsize(), knx_gateway.host))
+    def tunnel_connection(self, target):
+        """Try to establish a tunnel connection to the target.
+        if the connection is successfully established, the
+        resulting transport an protocol instances are added
+        as a dict to the self.bus_connections[target.host]
+        list."""
         future = asyncio.Future()
         transport, bus_protocol = yield from self.loop.create_datagram_endpoint(
             functools.partial(
@@ -435,23 +447,23 @@ class KnxMap(object):
                                         int.from_bytes(conf_response.data, 'big'))
 
                             # TODO: do more precise checks what to extract and add it to the target report
-                            for k, v in OBJECTS.get(0).items():
-                                count = yield from bus_protocol.configuration_request(target,
-                                                                                      object_type=0,
-                                                                                      start_index=0,
-                                                                                      property=v)
-                                if count and count.data:
-                                    count = int.from_bytes(count.data, 'big')
-                                else:
-                                    continue
-                                conf_response = yield from bus_protocol.configuration_request(target,
-                                                                                              object_type=0,
-                                                                                              num_elements=count,
-                                                                                              property=v)
-                                if conf_response and conf_response.data:
-
-                                    print(k + ':')
-                                    print(conf_response.data)
+                            # for k, v in OBJECTS.get(11).items():
+                            #     count = yield from bus_protocol.configuration_request(target,
+                            #                                                           object_type=11,
+                            #                                                           start_index=0,
+                            #                                                           property=v)
+                            #     if count and count.data:
+                            #         count = int.from_bytes(count.data, 'big')
+                            #     else:
+                            #         continue
+                            #     conf_response = yield from bus_protocol.configuration_request(target,
+                            #                                                                   object_type=11,
+                            #                                                                   num_elements=count,
+                            #                                                                   property=v)
+                            #     if conf_response and conf_response.data:
+                            #
+                            #         print(k + ':')
+                            #         print(conf_response.data)
 
                             bus_protocol.knx_tunnel_disconnect()
 
@@ -503,9 +515,11 @@ class KnxMap(object):
 
     @asyncio.coroutine
     def scan(self, targets=None, desc_timeout=2, desc_retries=2, bus_timeout=2,
-             bus_targets=None, bus_info=False, knx_source=None, auth_key=0xffffffff):
+             bus_targets=None, bus_info=False, knx_source=None, auth_key=0xffffffff,
+             configuration_reads=True):
         """The function that will be called by run_until_complete(). This is the main coroutine."""
         self.auth_key = auth_key
+        self.configuration_reads = configuration_reads
         if targets:
             self.set_targets(targets)
 
@@ -523,7 +537,29 @@ class KnxMap(object):
 
         if bus_targets and self.knx_gateways:
             self.bus_info = bus_info
-            bus_scanners = [asyncio.Task(self.bus_scan(g, bus_targets), loop=self.loop) for g in self.knx_gateways]
+            workers = [asyncio.Task(self.knx_description_worker(), loop=self.loop)
+                       for _ in range(self.max_workers if len(self.targets) > self.max_workers else len(self.targets))]
+            self.t0 = time.time()
+            yield from self.q.join()
+            self.t1 = time.time()
+            for w in workers:
+                w.cancel()
+
+            if bus_targets and self.knx_gateways:
+                bus_scanners = [asyncio.Task(self.bus_scan(knx_gateway=g,
+                                                           bus_targets=bus_targets),
+                                             loop=self.loop) for g in self.knx_gateways]
+                yield from asyncio.wait(bus_scanners)
+            else:
+                LOGGER.info('Scan took {} seconds'.format(self.t1 - self.t0))
+
+            for t in self.knx_gateways:
+                print_knx_target(t)
+        elif self.medium == 'usb':
+            if not USB_SUPPORT:
+                LOGGER.error('USB support not available, install hidapi module')
+            bus_scanners = [asyncio.Task(self.bus_scan(bus_targets=bus_targets),
+                                         loop=self.loop) for _ in range(self.max_workers)]
             yield from asyncio.wait(bus_scanners)
         else:
             LOGGER.info('Scan took {} seconds'.format(self.t1 - self.t0))
