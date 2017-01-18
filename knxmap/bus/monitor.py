@@ -1,4 +1,5 @@
 import logging
+import codecs
 
 from knxmap.bus.tunnel import KnxTunnelConnection
 from knxmap.data.constants import *
@@ -24,7 +25,8 @@ class KnxBusMonitor(KnxTunnelConnection):
             connect_request = KnxConnectRequest(sockname=self.sockname)
         else:
             # Create a TUNNEL_BUSMONITOR layer request
-            connect_request = KnxConnectRequest(sockname=self.sockname, layer_type='TUNNEL_BUSMONITOR')
+            connect_request = KnxConnectRequest(sockname=self.sockname,
+                                                layer_type='TUNNEL_BUSMONITOR')
         LOGGER.trace_outgoing(connect_request)
         self.transport.sendto(connect_request.get_message())
         # Send CONNECTIONSTATE_REQUEST to keep the connection alive
@@ -86,9 +88,10 @@ class KnxBusMonitor(KnxTunnelConnection):
                 tpci = cemi.tpci
                 if cemi.apci:
                     apci = cemi.apci
-        if cemi.extended_control_field and cemi.extended_control_field.get('address_type'):
+        if cemi.knx_destination and cemi.extended_control_field and \
+                cemi.extended_control_field.get('address_type'):
             dst_addr = message.parse_knx_group_address(cemi.knx_destination)
-        else:
+        elif cemi.knx_destination:
             dst_addr = message.parse_knx_address(cemi.knx_destination)
         if self.group_monitor:
             format = ('[ chan_id: {chan_id}, seq_no: {seq_no}, message_code: {msg_code}, '
@@ -96,7 +99,7 @@ class KnxBusMonitor(KnxTunnelConnection):
                       'tpci_seq: {tpci_seq}, apci_type: {apci_type}, apci_data: {apci_data} ]').format(
                 chan_id=message.communication_channel,
                 seq_no=message.sequence_counter,
-                msg_code=CEMI_PRIMITIVES[cemi.message_code],
+                msg_code=CEMI_PRIMITIVES.get(cemi.message_code),
                 src_addr=message.parse_knx_address(cemi.knx_source),
                 dst_addr=dst_addr,
                 tpci_type=_CEMI_TPCI_TYPES.get(tpci.tpci_type),
@@ -104,8 +107,11 @@ class KnxBusMonitor(KnxTunnelConnection):
                 apci_type=_CEMI_APCI_TYPES.get(apci.apci_type),
                 apci_data=apci.apci_data)
         else:
-            format = ('[ chan_id: {chan_id}, seq_no: {seq_no}, message_code: {msg_code} ]').format(
+            format = ('[ chan_id: {chan_id}, seq_no: {seq_no}, message_code: {msg_code}, '
+                      'timestamp: {timestamp}, raw_frame: {raw_frame} ]').format(
                 chan_id=message.communication_channel,
                 seq_no=message.sequence_counter,
-                msg_code=CEMI_PRIMITIVES[cemi.message_code])
+                msg_code=CEMI_PRIMITIVES.get(cemi.message_code),
+                timestamp=codecs.encode(cemi.additional_information.get('timestamp'), 'hex'),
+                raw_frame=codecs.encode(cemi.raw_frame, 'hex'))
         LOGGER.info(format)
