@@ -112,9 +112,9 @@ class KnxDeviceConfigurationAck(KnxMessage):
     def _unpack_knx_body(self, message):
         try:
             message = io.BytesIO(message)
-            self.body['structure_length'] = self._unpack_stream('!B', message)
-            self.body['communication_channel_id'] = self._unpack_stream('!B', message)
-            self.body['sequence_counter'] = self._unpack_stream('!B', message)
-            self.body['status'] = self._unpack_stream('!B', message)
+            self.structure_length = self._unpack_stream('!B', message)
+            self.communication_channel = self._unpack_stream('!B', message)
+            self.sequence_counter = self._unpack_stream('!B', message)
+            self.status = self._unpack_stream('!B', message)
         except Exception as e:
             LOGGER.exception(e)

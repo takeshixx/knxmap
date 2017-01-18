@@ -70,8 +70,8 @@ class KnxRemoteDiagnosticResponse(KnxMessage):
         try:
             message = io.BytesIO(message)
             self.body = self._unpack_hpai(message)
-            self.body['dib_dev_info'] = self._unpack_dib_dev_info(message)
-            self.body['dib_supp_sv_families'] = self._unpack_dib_supp_sv_families(message)
+            self.dib_dev_info = self._unpack_dib_dev_info(message)
+            self.dib_supp_sv_families = self._unpack_dib_supp_sv_families(message)
         except Exception as e:
             LOGGER.exception(e)
 

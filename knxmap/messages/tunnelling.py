@@ -36,9 +36,9 @@ class KnxTunnellingRequest(KnxMessage):
 
     def _pack_knx_body(self, cemi=None):
         self.body = bytearray(struct.pack('!B', 4))  # structure_length
-        self.body.extend(struct.pack('!B', self.communication_channel))  # channel id
-        self.body.extend(struct.pack('!B', self.sequence_count))  # sequence counter
-        self.body.extend(struct.pack('!B', 0))  # reserved
+        self.body.extend(struct.pack('!B', self.communication_channel))
+        self.body.extend(struct.pack('!B', self.sequence_count))
+        self.body.extend(struct.pack('!B', 0))
         if cemi:
             self.body.extend(cemi)
         else:
@@ -48,18 +48,14 @@ class KnxTunnellingRequest(KnxMessage):
     def _unpack_knx_body(self, message):
         try:
             message = io.BytesIO(message)
-            self.body['structure_length'] = self._unpack_stream('!B', message)
-            self.body['communication_channel_id'] = self._unpack_stream('!B', message)
-            self.body['sequence_counter'] = self._unpack_stream('!B', message)
-            self.body['reserved'] = self._unpack_stream('!B', message)
+            self.structure_length = self._unpack_stream('!B', message)
+            self.communication_channel = self._unpack_stream('!B', message)
+            self.sequence_counter = self._unpack_stream('!B', message)
+            self._unpack_stream('!B', message) # reserved
             # TODO: check what kind of data request it is?
             self.cemi.unpack_extended_data_request(message)
         except Exception as e:
             LOGGER.exception(e)
-
-    # def tpci_unnumbered_control_data(self, ucd_type):
-    #     self.cemi_frame = self.cemi.tpci_unnumbered_control_data(ucd_type)
-    #     self.pack_knx_message()
 
     # TODO: DEV CODE!
 
@@ -74,10 +70,6 @@ class KnxTunnellingRequest(KnxMessage):
         self.cemi_frame = cemi
         self.pack_knx_message()
 
-    # def tpci_numbered_control_data(self, ncd_type, sequence=0):
-    #     self.cemi_frame = self.cemi.tpci_numbered_control_data(ncd_type, sequence=sequence)
-    #     self.pack_knx_message()
-
     def tpci_numbered_control_data(self, ncd_type, sequence=0):
         cemi = CemiFrame()
         cemi = cemi.pack()
@@ -89,10 +81,6 @@ class KnxTunnellingRequest(KnxMessage):
         cemi.extend(data_request.pack())
         self.cemi_frame = cemi
         self.pack_knx_message()
-
-    # def apci_device_descriptor_read(self, sequence=0):
-    #     self.cemi_frame = self.cemi.apci_device_descriptor_read(sequence=sequence)
-    #     self.pack_knx_message()
 
     def apci_device_descriptor_read(self, sequence=0):
         cemi = CemiFrame()
@@ -156,10 +144,6 @@ class KnxTunnellingRequest(KnxMessage):
 
     def apci_property_description_read(self, sequence=0, object_index=0, property_id=0x0f,
                                        num_elements=1, start_index=1):
-        """A_PropertyDescription_Read"""
-        #self.cemi_frame = self.cemi.apci_property_description_read(sequence=sequence, object_index=object_index,
-        #                                                           property_id=property_id, num_elements=num_elements,
-        #                                                           start_index=start_index)
         cemi = CemiFrame()
         cemi = cemi.pack()
         data = bytearray(struct.pack('!B', object_index))  # object index
@@ -346,30 +330,33 @@ class KnxTunnellingRequest(KnxMessage):
 
 
 class KnxTunnellingAck(KnxMessage):
-    def __init__(self, message=None, communication_channel=None, sequence_count=0):
+    def __init__(self, message=None, communication_channel=None, sequence_count=0,
+                 status=0):
         super(KnxTunnellingAck, self).__init__()
+        self.header['service_type'] = KNX_MESSAGE_TYPES.get('TUNNELLING_ACK')
+        self.communication_channel = communication_channel
+        self.structure_length = 4
+        self.sequence_count = sequence_count
+        self.status = status
         if message:
             self.message = message
             self.unpack_knx_message(message)
         else:
-            self.header['service_type'] = KNX_MESSAGE_TYPES.get('TUNNELLING_ACK')
-            self.communication_channel = communication_channel
-            self.sequence_count = sequence_count
             self.pack_knx_message()
 
     def _pack_knx_body(self):
-        self.body = bytearray(struct.pack('!B', 4))  # structure_length
-        self.body.extend(struct.pack('!B', self.communication_channel))  # channel id
-        self.body.extend(struct.pack('!B', self.sequence_count))  # sequence counter
-        self.body.extend(struct.pack('!B', 0))  # status
+        self.body = bytearray(struct.pack('!B', self.structure_length))
+        self.body.extend(struct.pack('!B', self.communication_channel))
+        self.body.extend(struct.pack('!B', self.sequence_count))
+        self.body.extend(struct.pack('!B', self.status))
         return self.body
 
     def _unpack_knx_body(self, message):
         try:
             message = io.BytesIO(message)
-            self.body['structure_length'] = self._unpack_stream('!B', message)
-            self.body['communication_channel_id'] = self._unpack_stream('!B', message)
-            self.body['sequence_counter'] = self._unpack_stream('!B', message)
-            self.body['status'] = self._unpack_stream('!B', message)
+            self.structure_length = self._unpack_stream('!B', message)
+            self.communication_channel = self._unpack_stream('!B', message)
+            self.sequence_counter = self._unpack_stream('!B', message)
+            self.status = self._unpack_stream('!B', message)
         except Exception as e:
             LOGGER.exception(e)

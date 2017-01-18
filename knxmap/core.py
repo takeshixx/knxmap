@@ -322,16 +322,16 @@ class KnxMap(object):
                     t = KnxTargetReport(
                         host=peer[0],
                         port=peer[1],
-                        mac_address=response.body.get('dib_dev_info').get('knx_mac_address'),
-                        knx_address=response.body.get('dib_dev_info').get('knx_address'),
-                        device_serial=response.body.get('dib_dev_info').get('knx_device_serial'),
-                        friendly_name=response.body.get('dib_dev_info').get('device_friendly_name'),
-                        device_status=response.body.get('dib_dev_info').get('device_status'),
-                        knx_medium=response.body.get('dib_dev_info').get('knx_medium'),
-                        project_install_identifier=response.body.get('dib_dev_info').get('project_install_identifier'),
+                        mac_address=response.dib_dev_info.get('knx_mac_address'),
+                        knx_address=response.dib_dev_info.get('knx_address'),
+                        device_serial=response.dib_dev_info.get('knx_device_serial'),
+                        friendly_name=response.dib_dev_info.get('device_friendly_name'),
+                        device_status=response.dib_dev_info.get('device_status'),
+                        knx_medium=response.dib_dev_info.get('knx_medium'),
+                        project_install_identifier=response.dib_dev_info.get('project_install_identifier'),
                         supported_services=[
                             KNX_SERVICES[k] for k, v in
-                            response.body.get('dib_supp_sv_families').get('families').items()],
+                            response.dib_supp_sv_families.get('families').items()],
                         bus_devices=[])
 
                     self.knx_gateways.append(t)
@@ -367,17 +367,17 @@ class KnxMap(object):
                     target_report = KnxTargetReport(
                         host=target[0],
                         port=target[1],
-                        mac_address=response.body.get('dib_dev_info').get('knx_mac_address'),
-                        knx_address=response.body.get('dib_dev_info').get('knx_address'),
-                        device_serial=response.body.get('dib_dev_info').get('knx_device_serial'),
-                        friendly_name=response.body.get('dib_dev_info').get('device_friendly_name'),
+                        mac_address=response.dib_dev_info.get('knx_mac_address'),
+                        knx_address=response.dib_dev_info.get('knx_address'),
+                        device_serial=response.dib_dev_info.get('knx_device_serial'),
+                        friendly_name=response.dib_dev_info.get('device_friendly_name'),
                         device_status=knxmap.utils.make_runstate_printable(
-                            response.body.get('dib_dev_info').get('device_status')),
-                        knx_medium=response.body.get('dib_dev_info').get('knx_medium'),
-                        project_install_identifier=response.body.get('dib_dev_info').get('project_install_identifier'),
+                            response.dib_dev_info.get('device_status')),
+                        knx_medium=response.dib_dev_info.get('knx_medium'),
+                        project_install_identifier=response.dib_dev_info.get('project_install_identifier'),
                         supported_services=[
                             KNX_SERVICES[k] for k, v in
-                            response.body.get('dib_supp_sv_families').get('families').items()],
+                            response.dib_supp_sv_families.get('families').items()],
                         bus_devices=[])
 
                     # TODO: should we check if the device announces support? (support is mandatory)

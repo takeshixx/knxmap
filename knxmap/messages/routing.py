@@ -37,7 +37,7 @@ class KnxRoutingIndication(KnxMessage):
             message = io.BytesIO(message)
             self.message_code = self._unpack_stream('!B', message)
             self.additional_info_len = self._unpack_stream('!B', message)
-            #self.body['cemi'] = self._unpack_cemi(message)
+            #self.cemi = self._unpack_cemi(message)
         except Exception as e:
             LOGGER.exception(e)
 

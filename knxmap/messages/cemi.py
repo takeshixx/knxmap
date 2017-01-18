@@ -53,15 +53,19 @@ class CemiFrame(object):
         """This function provides message parsing that
         is mostly compatible with the old API."""
         self.unpack(message)
-        data_request = ExtendedDataRequest(message=message)
-        self.control_field = data_request.control_field
-        self.extended_control_field = data_request.extended_control_field
-        self.knx_source = data_request.knx_source
-        self.knx_destination = data_request.knx_destination
-        self.npdu_len = data_request.npdu_len
-        self.tpci = data_request.tpci
-        self.apci = data_request.apci
-        self.data = data_request.data
+        if self.information_length > 0:
+            # TODO: implement
+            pass
+        else:
+            data_request = ExtendedDataRequest(message=message)
+            self.control_field = data_request.control_field
+            self.extended_control_field = data_request.extended_control_field
+            self.knx_source = data_request.knx_source
+            self.knx_destination = data_request.knx_destination
+            self.npdu_len = data_request.npdu_len
+            self.tpci = data_request.tpci
+            self.apci = data_request.apci
+            self.data = data_request.data
 
     @staticmethod
     def pack_cemi_runstate(prog_mode=False, link_layer_active=False, transport_layer_active=False,

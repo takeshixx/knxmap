@@ -128,9 +128,9 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             if not knx_msg.ERROR:
                 if not self.tunnel_established:
                     self.tunnel_established = True
-                self.communication_channel = knx_msg.body.get('communication_channel_id')
+                self.communication_channel = knx_msg.communication_channel
                 if not self.knx_source_address:
-                    self.knx_source_address = knx_msg.body.get('data_block').get('knx_address')
+                    self.knx_source_address = knx_msg.data_block.get('knx_address')
                 self.future.set_result(True)
             else:
                 LOGGER.error(knx_msg.ERROR)
@@ -151,7 +151,8 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             if not self.future.done():
                 self.future.set_result(None)
         else:
-            LOGGER.error('Unknown Core Message: {}'.format(knx_msg.header.get('service_type')))
+            LOGGER.error('Unknown Core Message: {}'.format(
+                knx_msg.header.get('service_type')))
 
     def handle_configuration_services(self, knx_msg):
         if isinstance(knx_msg, KnxDeviceConfigurationRequest):
@@ -272,10 +273,11 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
 
             # If we receive any L_Data.con or L_Data.ind from a KNXnet/IP gateway
             # we have to reply with a tunnelling ack.
-            if cemi_msg_code in [CEMI_MSG_CODES.get('L_Data.con'), CEMI_MSG_CODES.get('L_Data.ind')]:
+            if cemi_msg_code in [CEMI_MSG_CODES.get('L_Data.con'),
+                                 CEMI_MSG_CODES.get('L_Data.ind')]:
                 tunnelling_ack = KnxTunnellingAck(
-                    communication_channel=knx_msg.body.get('communication_channel_id'),
-                    sequence_count=knx_msg.body.get('sequence_counter'))
+                    communication_channel=knx_msg.communication_channel,
+                    sequence_count=knx_msg.sequence_counter)
                 LOGGER.trace_outgoing(tunnelling_ack)
                 self.transport.sendto(tunnelling_ack.get_message())
 
