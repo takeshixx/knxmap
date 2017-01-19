@@ -60,6 +60,9 @@ ARGS.add_argument(
 ARGS.add_argument(
     '--knx-source-address', action='store', dest='knx_source',
     default=None, help='KNX source address used for messages to bus devices')
+ARGS.add_argument(
+    '--medium', action='store', default='net',
+    help='authorization key for System 2 and System 7 devices')
 
 pscan = SUBARGS.add_parser('scan', help='scan KNXnet/IP gateways and attached bus devices',
                            formatter_class=argparse.ArgumentDefaultsHelpFormatter)

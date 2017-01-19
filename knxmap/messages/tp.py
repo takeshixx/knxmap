@@ -119,7 +119,9 @@ class DataRequest(object):
         return checksum
 
     def pack(self):
-        data_request = bytearray(struct.pack('!B', self.pack_control_field()))
+        #data_request = bytearray(struct.pack('!B', self.pack_control_field()))
+        # TODO: fix
+        data_request = bytearray(struct.pack('!B', 0xb0))
         data_request.extend(struct.pack('!H', self.knx_source))
         data_request.extend(struct.pack('!H', self.knx_destination))
         tpci = None
@@ -138,7 +140,7 @@ class DataRequest(object):
                 tpci |= TPCI_UNNUMBERED_CONTROL_DATA_TYPES.get(self.tpci_control_type) << 0
             elif self.tpci_type == 'NCD':
                 tpci |= TPCI_NUMBERED_CONTROL_DATA_TYPES.get(self.tpci_control_type) << 0
-        if self.apci_type:
+        if self.apci_type is not None:
             apci = Apci(apci_type=self.apci_type,
                         apci_data=self.apci_data)
             apci = apci.pack()
@@ -149,10 +151,10 @@ class DataRequest(object):
             apci |= ((tpci >> 6) & 1) << 14
             apci |= ((tpci >> 7) & 1) << 15
             data_request.extend(struct.pack('!H', apci))
+            if self.data:
+                data_request.extend(self.data)
         elif tpci:
-            data_request.extend(struct.pack('<H', tpci))
-        if self.data:
-            data_request.extend(self.data)
+            data_request.extend(struct.pack('<B', tpci))
         return data_request
 
     def unpack(self, message):
@@ -161,9 +163,6 @@ class DataRequest(object):
         self.knx_destination = self._unpack_stream('!H', message)
         #self.npci = self.unpack_npci(self._unpack_stream('!B', message))
         _npci = self._unpack_stream('!B', message)
-        print('_npci')
-        print(_npci)
-        print(bin(_npci))
         self.npci = self.unpack_npci(_npci)
         if self.npci.get('data_length') > 0:
             tpci_apci = bytearray(self._unpack_stream('{}s'.format(self.npci.get('data_length')),

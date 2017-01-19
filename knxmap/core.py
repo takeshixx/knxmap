@@ -25,6 +25,12 @@ from knxmap.bus.monitor import KnxBusMonitor
 
 LOGGER = logging.getLogger(__name__)
 
+try:
+    import hid
+    USB_SUPPORT = True
+except ImportError:
+    USB_SUPPORT = False
+
 
 class KnxMap(object):
     """The main scanner instance that takes care of scheduling
@@ -520,25 +526,17 @@ class KnxMap(object):
         """The function that will be called by run_until_complete(). This is the main coroutine."""
         self.auth_key = auth_key
         self.configuration_reads = configuration_reads
-        if targets:
-            self.set_targets(targets)
-
+        self.knx_source = knx_source
         self.desc_timeout = desc_timeout
         self.desc_retries = desc_retries
         self.bus_timeout = bus_timeout
-        self.knx_source = knx_source
-        workers = [asyncio.Task(self.knx_description_worker(), loop=self.loop)
-                   for _ in range(self.max_workers if len(self.targets) > self.max_workers else len(self.targets))]
-        self.t0 = time.time()
-        yield from self.q.join()
-        self.t1 = time.time()
-        for w in workers:
-            w.cancel()
-
-        if bus_targets and self.knx_gateways:
-            self.bus_info = bus_info
-            workers = [asyncio.Task(self.knx_description_worker(), loop=self.loop)
-                       for _ in range(self.max_workers if len(self.targets) > self.max_workers else len(self.targets))]
+        self.bus_info = bus_info
+        if targets:
+            self.set_targets(targets)
+        if self.medium == 'net':
+            workers = [asyncio.Task(self._knx_description_worker(), loop=self.loop)
+                       for _ in range(self.max_workers
+                                      if len(self.targets) > self.max_workers else len(self.targets))]
             self.t0 = time.time()
             yield from self.q.join()
             self.t1 = time.time()
@@ -546,26 +544,56 @@ class KnxMap(object):
                 w.cancel()
 
             if bus_targets and self.knx_gateways:
-                bus_scanners = [asyncio.Task(self.bus_scan(knx_gateway=g,
-                                                           bus_targets=bus_targets),
+                # Start scanning on the bus
+                bus_scanners = [asyncio.Task(self._bus_scan(knx_gateway=g,
+                                                            bus_targets=bus_targets),
                                              loop=self.loop) for g in self.knx_gateways]
                 yield from asyncio.wait(bus_scanners)
-            else:
-                LOGGER.info('Scan took {} seconds'.format(self.t1 - self.t0))
 
             for t in self.knx_gateways:
                 print_knx_target(t)
-        elif self.medium == 'usb':
-            if not USB_SUPPORT:
-                LOGGER.error('USB support not available, install hidapi module')
-            bus_scanners = [asyncio.Task(self.bus_scan(bus_targets=bus_targets),
-                                         loop=self.loop) for _ in range(self.max_workers)]
-            yield from asyncio.wait(bus_scanners)
-        else:
             LOGGER.info('Scan took {} seconds'.format(self.t1 - self.t0))
 
-        for t in self.knx_gateways:
-            print_knx_target(t)
+        elif self.medium == 'usb':
+            if USB_SUPPORT:
+                #bus_scanners = [asyncio.Task(self._bus_scan(bus_targets=bus_targets),
+                #                         loop=self.loop) for _ in range(self.max_workers)]
+                #yield from asyncio.wait(bus_scanners)
+
+                from knxmap.usb.core import KnxUsbTransport, KnxHidReport
+                try:
+                    transport = KnxUsbTransport(vendor_id=0x147b,
+                                                product_id=0x5120)
+                except OSError:
+                    LOGGER.error('Could not open USB device (try running KNXmap with superuser privileges)')
+                    return
+
+                frame = KnxEmi1Frame(knx_source='0.0.0',
+                                     knx_destination='1.1.2')
+                report = KnxHidReport(message_code=0x11,
+                                      protocol_id=0x01,
+                                      frame=frame.pack())
+                # frame = bytearray(b'\x11\xb0\x00\x00\x00\x00\xe1\x01\x00')
+                # report = KnxHidReport(message_code=0x11,
+                #                       protocol_id=0x01,
+                #                       frame=frame.pack())
+                LOGGER.trace_outgoing(report)
+                transport.write(report.report)
+                time.sleep(1)
+                r = transport.read()
+                if r:
+                    report = KnxHidReport(data=r)
+                else:
+                    print('GOT NO RESPONSE')
+                for _ in range(5):
+                    time.sleep(1)
+                    r = transport.read()
+                    if r:
+                        report = KnxHidReport(data=r)
+                    else:
+                        print('GOT NO RESPONSE')
+            else:
+                LOGGER.error('USB support not available, install hidapi module')
 
     @asyncio.coroutine
     def group_writer(self, target, value=0, routing=False, desc_timeout=2,
