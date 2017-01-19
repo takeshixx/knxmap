@@ -49,7 +49,7 @@ ARGS.add_argument(
     '--workers', action='store', type=int, metavar='N',
     default=30, help='count of concurrent workers')
 ARGS.add_argument(
-    '--connections', action='store', type=int, metavar='N', default=0,
+    '--connections', action='store', type=int, metavar='N', default=1,
     help='count of concurrent tunnel connections (0 means as much as a device supports)')
 ARGS.add_argument(
     '--timeout', action='store', dest='timeout', type=int,

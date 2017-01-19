@@ -18,10 +18,10 @@ class CemiFrame(object):
      +--------+--------+-------- ... --------+---------------- ... ----------------+
        1 byte   1 byte      [0..n] bytes                     n bytes
     """
-    def __init__(self, message_code=0x11, additional_information_len=None,
+    def __init__(self, message_code=0x11, additional_information_len=0,
                  additional_information=None):
         self.message_code = message_code
-        self.additional_information_len = additional_information
+        self.additional_information_len = additional_information_len
         self.additional_information = additional_information or bytearray()
         self.raw_frame = bytearray()
         self.control_field = None
@@ -44,7 +44,7 @@ class CemiFrame(object):
         message_code = message_code if message_code else self.message_code
         cemi = bytearray(struct.pack('!B', message_code))  # cEMI message code
         # TODO: implement variable length if additional information is included
-        cemi.extend(struct.pack('!B', len(self.additional_information_len)))  # add information length
+        cemi.extend(struct.pack('!B', self.additional_information_len))  # add information length
         if self.additional_information_len:
             cemi.extend(self.additional_information)
         return cemi

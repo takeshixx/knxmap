@@ -65,7 +65,7 @@ class DataRequest(object):
             LOGGER.exception(e)
 
     @staticmethod
-    def pack_control_field(priority=0x00, repeat_flag=True):
+    def pack_control_field(priority=0x00, repeat_flag=False):
         """Pack control field"""
         cf = 0
         cf |= 0 << 0
