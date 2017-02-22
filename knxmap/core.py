@@ -452,13 +452,6 @@ class KnxMap(object):
                         if ret:
                             properties['UsrPrg'] = codecs.encode(ret, 'hex')
 
-                        ret = yield from protocol.apci_memory_read(
-                            target,
-                            memory_address=0x0116,
-                            read_count=4)
-                        if ret:
-                            properties['AdrTab'] = codecs.encode(ret, 'hex')
-
                         start_addr = 0x0100
                         properties['EEPROM_DUMP'] = b''
                         for i in range(51):
@@ -469,6 +462,35 @@ class KnxMap(object):
                             if ret:
                                 properties['EEPROM_DUMP'] += codecs.encode(ret, 'hex')
                             start_addr += 5
+
+                    # Try to read group addresses
+                    if desc_type ==7:
+                        group_address_table = 0x4000
+                        auth_level = yield from protocol.apci_authenticate(
+                            target,
+                            key=self.auth_key)
+                        if auth_level > 0:
+                            LOGGER.error('Invalid authentication key')
+                    else:
+                        group_address_table = 0x0116
+
+                    ret = yield from protocol.apci_memory_read(
+                        target,
+                        memory_address=group_address_table,
+                        read_count=1)
+
+                    if ret and int.from_bytes(ret, 'big') > 1:
+                        byte_count = (int.from_bytes(ret, 'big') * 2) + 1
+                        address_table = yield from protocol.apci_memory_read(
+                            target,
+                            memory_address=group_address_table,
+                            read_count=byte_count) # each address is 2 bytes long
+                        if address_table:
+                            properties['Group Addresses'] = []
+                            ga = address_table[3:] # skip length and individual address
+                            for addr in [ga[i:i + 2] for i in range(0, len(ga), 2)]:
+                                properties['Group Addresses'].append(
+                                    knxmap.utils.parse_knx_group_address(int.from_bytes(addr, 'big')))
 
                     if descriptor:
                         t = KnxBusTargetReport(
