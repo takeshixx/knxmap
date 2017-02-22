@@ -59,27 +59,18 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
 
     def connection_timeout(self):
         LOGGER.warning('Tunnel connection timed out')
-        print('target_futures')
-        print(self.target_futures)
         if self.target_futures:
             for k, v in self.target_futures.items():
                 if not v.done():
                     v.set_result(False)
         if self.response_queue:
-            print('RESPONSES IN QUEUE')
             for r in self.response_queue:
-                print(r)
                 try:
-                    print('KNX SOURCE:', knxmap.utils.parse_knx_address(r.cemi.knx_source))
-                    print('KNX SOURCE:', knxmap.utils.parse_knx_address(r.cemi.knx_destination))
-                    print('CEMI TYPE:', _CEMI_MSG_CODES.get(r.cemi.message_code))
                     cemi_msg_code = r.cemi.message_code
                     cemi_tpci_type = r.cemi.tpci.tpci_type
-                    print('TPCI TYPE:', _CEMI_TPCI_TYPES.get(cemi_tpci_type))
                     cemi_apci_type = None
                     if r.cemi.apci:
                         cemi_apci_type = r.cemi.apci.apci_type
-                        print('APCI TYPE:', _CEMI_APCI_TYPES.get(cemi_apci_type))
                 except AttributeError:
                     continue
         if self.tunnel_established:
