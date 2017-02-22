@@ -36,7 +36,8 @@ class KnxMap(object):
     """The main scanner instance that takes care of scheduling
     workers for the targets."""
     def __init__(self, targets=None, max_workers=100, max_connections=1,
-                 loop=None, medium='net'):
+                 loop=None, medium='net', configuration_reads=True,
+                 bus_timeout=2, iface=False, auth_key=0xffffffff):
         self.loop = loop or asyncio.get_event_loop()
         # The number of concurrent workers
         # for discovering KNXnet/IP gateways
@@ -63,6 +64,10 @@ class KnxMap(object):
         self.knx_source = None
         self.medium = medium
         self.bus_connections = collections.OrderedDict()
+        self.configuration_reads = configuration_reads
+        self.bus_timeout = bus_timeout
+        self.auth_key = auth_key
+        self.iface = iface
         if targets:
             self.set_targets(targets)
         else:
@@ -401,7 +406,6 @@ class KnxMap(object):
                                     x[k.replace('PID_', '')] = codecs.encode(ret, 'hex')
                             if x:
                                 properties[OBJECT_TYPES.get(object_index)] = x
-
                     else:
                         # Try to MemoryRead the manufacturer ID on System 1 devices.
                         # Note: System 1 devices do not support access controls, so
@@ -1010,6 +1014,8 @@ class KnxMap(object):
                     return
                 if isinstance(args.value, str):
                     value = int(args.value)
+                else:
+                    value = args.value
                 yield from protocol.apci_group_value_write(target, value=value)
 
             protocol.knx_tunnel_disconnect()
