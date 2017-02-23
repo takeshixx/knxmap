@@ -58,7 +58,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                                          self.connection_timeout)
 
     def connection_timeout(self):
-        LOGGER.warning('Tunnel connection timed out')
+        LOGGER.debug('Tunnel connection timed out')
         if self.target_futures:
             for k, v in self.target_futures.items():
                 if not v.done():
@@ -89,6 +89,9 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         target that arrived out-of-band."""
         if self.response_queue:
             for response in self.response_queue:
+                if isinstance(response, bool):
+                    self.response_queue.remove(response)
+                    continue
                 try:
                     src_addr = knxmap.utils.parse_knx_address(response.cemi.knx_source)
                     dst_addr = knxmap.utils.parse_knx_address(response.cemi.knx_destination)
@@ -315,7 +318,6 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                                 knx_dst == r.parse_knx_address(r.cemi.knx_source) and \
                                 r.cemi.message_code == CEMI_MSG_CODES.get('L_Data.con') and \
                                 r.cemi.tpci.tpci_type == CEMI_TPCI_TYPES.get('NDP'):
-                            print('GOT A MATCHING CONFIRMATION IN QUEUE')
                             self.response_queue.remove(r)
 
                     # If we receive any Numbered Data Packets for
@@ -509,11 +511,28 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
             memory_address=memory_address,
             read_count=read_count)
         LOGGER.trace_outgoing(tunnel_request)
-        value = yield from self.send_data(tunnel_request.get_message(), target)
+        knx_msg = yield from self.send_data(tunnel_request.get_message(), target)
+        # TODO: if that works, it should be implemented for all APCI functions!
+        if not isinstance(knx_msg, KnxTunnellingRequest) or \
+                knx_msg.cemi.apci.apci_type == CEMI_APCI_TYPES.get('A_Memory_Response') or \
+                int.from_bytes(knx_msg.cemi.data[:2], 'big') == memory_address:
+            # Put the response back in the queue
+            if not isinstance(knx_msg, bool):
+                self.response_queue.append(knx_msg)
+            yield from asyncio.sleep(.3)
+            knx_msg = None
+            for response in self.response_queue:
+                if isinstance(response, KnxTunnellingRequest) and \
+                        response.cemi and response.cemi.apci and \
+                        response.cemi.apci.apci_type == CEMI_APCI_TYPES.get('A_Memory_Response') or \
+                        int.from_bytes(response.cemi.data[:2], 'big') == memory_address:
+                    knx_msg = response
+                    self.response_queue.remove(response)
+            if not knx_msg:
+                LOGGER.debug('No proper response received')
         yield from self.tpci_send_ncd(target)
-        if isinstance(value, KnxTunnellingRequest) and \
-                value.cemi.data:
-            return value.cemi.data[2:]
+        if knx_msg and knx_msg.cemi.data:
+            return knx_msg.cemi.data[2:]
         else:
             return False
 
