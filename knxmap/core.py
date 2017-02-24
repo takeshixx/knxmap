@@ -37,7 +37,8 @@ class KnxMap(object):
     workers for the targets."""
     def __init__(self, targets=None, max_workers=100, max_connections=1,
                  loop=None, medium='net', configuration_reads=True,
-                 bus_timeout=2, iface=False, auth_key=0xffffffff):
+                 bus_timeout=2, iface=False, auth_key=0xffffffff,
+                 testing=False):
         self.loop = loop or asyncio.get_event_loop()
         # The number of concurrent workers
         # for discovering KNXnet/IP gateways
@@ -68,6 +69,7 @@ class KnxMap(object):
         self.bus_timeout = bus_timeout
         self.auth_key = auth_key
         self.iface = iface
+        self.testing = testing
         if targets:
             self.set_targets(targets)
         else:
@@ -316,8 +318,9 @@ class KnxMap(object):
         self.search_timeout = search_timeout
         LOGGER.info('Make sure there are no filtering rules that drop UDP multicast packets!')
         yield from self._search_gateways()
-        for t in self.knx_gateways:
-            print_knx_target(t)
+        if not self.testing:
+            for t in self.knx_gateways:
+                print_knx_target(t)
         LOGGER.info('Searching done')
 
     @asyncio.coroutine
@@ -599,8 +602,9 @@ class KnxMap(object):
                                              loop=self.loop) for g in self.knx_gateways]
                 yield from asyncio.wait(bus_scanners)
 
-            for t in self.knx_gateways:
-                print_knx_target(t)
+            if not self.testing:
+                for t in self.knx_gateways:
+                    print_knx_target(t)
             LOGGER.info('Scan took {} seconds'.format(self.t1 - self.t0))
 
         elif self.medium == 'usb':
