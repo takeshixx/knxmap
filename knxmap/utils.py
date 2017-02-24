@@ -91,10 +91,11 @@ def unpack_ip_address(address):
 
 def get_manufacturer_by_id(mid):
     assert isinstance(mid, int)
-    m = json.load(open('knxmap/data/manufacturers.json'))
-    for _m in m.get('manufacturers'):
-        if int(_m.get('knx_manufacturer_id')) == mid:
-            return _m.get('name')
+    with open('knxmap/data/manufacturers.json') as f:
+        m = json.load(f)
+        for _m in m.get('manufacturers'):
+            if int(_m.get('knx_manufacturer_id')) == mid:
+                return _m.get('name')
 
 
 def make_runstate_printable(runstate):
