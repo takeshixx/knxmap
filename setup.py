@@ -12,9 +12,10 @@ elif sys.version_info.major > 2 and \
     sys.exit(1)
 
 setup(name='KNXmap',
-      version='0.9.9',
+      version='0.9.10',
       packages=['knxmap',
                 'knxmap.bus',
+                'knxmap.usb',
                 'knxmap.data',
                 'knxmap.messages'],
       entry_points={
