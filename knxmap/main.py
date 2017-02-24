@@ -6,7 +6,7 @@ import logging
 import functools
 
 from knxmap import KnxMap, Targets, KnxTargets
-from knxmap.misc import TRACE_LOG_LEVEL, trace_packet, trace_incoming, trace_outgoing
+from knxmap.misc import setup_logger
 
 # asyncio requires at least Python 3.3
 if sys.version_info.major < 3 or \
@@ -174,13 +174,7 @@ pmonitor.add_argument(
 
 def main():
     args = ARGS.parse_args()
-    levels = [logging.ERROR, logging.WARN, logging.INFO, logging.DEBUG, TRACE_LOG_LEVEL]
-    log_format = '[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s' if args.level > 2 else '%(message)s'
-    logging.addLevelName(TRACE_LOG_LEVEL, 'TRACE')
-    logging.Logger.trace = trace_packet
-    logging.Logger.trace_incoming = trace_incoming
-    logging.Logger.trace_outgoing = trace_outgoing
-    logging.basicConfig(level=levels[min(args.level, len(levels) - 1)], format=log_format)
+    setup_logger(args.level)
     loop = asyncio.get_event_loop()
 
     if hasattr(args, 'targets'):

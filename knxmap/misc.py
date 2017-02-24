@@ -62,3 +62,13 @@ def trace_packet(self, message, *args, **kwargs):
         output += hexdump(message)
         output += direction
         LOGGER._log(TRACE_LOG_LEVEL, output, args)
+
+
+def setup_logger(level):
+    levels = [logging.ERROR, logging.WARN, logging.INFO, logging.DEBUG, TRACE_LOG_LEVEL]
+    log_format = '[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s' if level > 2 else '%(message)s'
+    logging.addLevelName(TRACE_LOG_LEVEL, 'TRACE')
+    logging.Logger.trace = trace_packet
+    logging.Logger.trace_incoming = trace_incoming
+    logging.Logger.trace_outgoing = trace_outgoing
+    logging.basicConfig(level=levels[min(level, len(levels) - 1)], format=log_format)
