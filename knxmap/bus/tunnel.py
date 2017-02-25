@@ -2,8 +2,9 @@ import asyncio
 import logging
 import struct
 
-from knxmap.data.constants import *
 import knxmap.utils
+from knxmap.data.constants import *
+from knxmap.exceptions import *
 from knxmap.messages import parse_message, KnxMessage, KnxConnectRequest, KnxConnectResponse, \
                             KnxDisconnectRequest, KnxDisconnectResponse, KnxDeviceConfigurationRequest, \
                             KnxDeviceConfigurationAck, KnxTunnellingRequest, KnxTunnellingAck, \
@@ -169,10 +170,11 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                     self.knx_source_address = knx_msg.data_block.get('knx_address')
                 self.future.set_result(True)
             else:
-                LOGGER.error('Establishing tunnel connection failed: %s' %
-                             knx_msg.ERROR)
+                #LOGGER.error('Establishing tunnel connection failed: %s' %
+                #             knx_msg.ERROR)
                 self.transport.close()
-                self.future.set_result(None)
+                raise KnxTunnelException(knx_msg.ERROR)
+                #self.future.set_result(None)
         elif isinstance(knx_msg, KnxConnectionStateResponse):
             # After receiving a CONNECTIONSTATE_RESPONSE schedule the next one
             self.loop.call_later(50, self.knx_keep_alive)
