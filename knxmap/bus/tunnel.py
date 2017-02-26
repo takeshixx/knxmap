@@ -220,7 +220,10 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
     def handle_tunnel_services(self, knx_msg):
         if isinstance(knx_msg, KnxTunnellingRequest):
             knx_src = knx_msg.parse_knx_address(knx_msg.cemi.knx_source)
-            knx_dst = knx_msg.parse_knx_address(knx_msg.cemi.knx_destination)
+            if knx_msg.cemi.extended_control_field.get('address_type'):
+                knx_dst = knx_msg.parse_knx_group_address(knx_msg.cemi.knx_destination)
+            else:
+                knx_dst = knx_msg.parse_knx_address(knx_msg.cemi.knx_destination)
             cemi_msg_code = knx_msg.cemi.message_code
             cemi_tpci_type = knx_msg.cemi.tpci.tpci_type
             cemi_apci_type = None
