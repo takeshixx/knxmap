@@ -296,7 +296,7 @@ class ExtendedDataRequest(object):
         return cf
 
     @staticmethod
-    def pack_extended_control_field(ext_frame_format=0x00, hop_count=6, address_type=False):
+    def pack_extended_control_field(ext_frame_format=0x00, hop_count=6, address_type=0):
         """Pack controlfield2 of the cEMI message.
 
           Bit  |
@@ -311,7 +311,7 @@ class ExtendedDataRequest(object):
         cf = 0
         cf |= ext_frame_format << 0
         cf |= hop_count << 4
-        cf |= (1 if address_type else 0) << 7
+        cf |= address_type << 7
         return cf
 
     @staticmethod
@@ -338,7 +338,9 @@ class ExtendedDataRequest(object):
 
     def pack(self):
         data_request = bytearray(struct.pack('!B', self.pack_control_field()))
-        data_request.extend(struct.pack('!B', self.pack_extended_control_field()))
+        data_request.extend(struct.pack('!B', self.pack_extended_control_field(
+            hop_count=self.routing_count,
+            address_type=self.destination_type)))
         data_request.extend(struct.pack('!H', self.knx_source))
         data_request.extend(struct.pack('!H', self.knx_destination))
         data_len = 0

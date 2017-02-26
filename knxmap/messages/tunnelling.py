@@ -308,6 +308,7 @@ class KnxTunnellingRequest(KnxMessage):
         cemi = cemi.pack()
         data_request = ExtendedDataRequest(knx_source=self.knx_source,
                                            knx_destination=self.knx_destination,
+                                           destination_type=1,
                                            tpci_type='UDP',
                                            apci_type='A_GroupValue_Write',
                                            apci_data=value)
