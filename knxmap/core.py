@@ -19,6 +19,7 @@ from knxmap.data.constants import *
 from knxmap.messages import CemiFrame, KnxDescriptionResponse, KnxEmi1Frame
 from knxmap.gateway import *
 from knxmap.targets import *
+from knxmap.exceptions import *
 from knxmap.bus.tunnel import KnxTunnelConnection
 from knxmap.bus.router import KnxRoutingConnection
 from knxmap.bus.monitor import KnxBusMonitor
@@ -38,7 +39,7 @@ class KnxMap(object):
     def __init__(self, targets=None, max_workers=100, max_connections=1,
                  loop=None, medium='net', configuration_reads=True,
                  bus_timeout=2, iface=False, auth_key=0xffffffff,
-                 testing=False):
+                 testing=False, ignore_auth=False):
         self.loop = loop or asyncio.get_event_loop()
         # The number of concurrent workers
         # for discovering KNXnet/IP gateways
@@ -70,6 +71,7 @@ class KnxMap(object):
         self.auth_key = auth_key
         self.iface = iface
         self.testing = testing
+        self.ignore_auth = ignore_auth
         if targets:
             self.set_targets(targets)
         else:
@@ -469,13 +471,15 @@ class KnxMap(object):
                     # Try to read group addresses
                     if desc_type ==7:
                         group_address_table = 0x4000
+                    else:
+                        group_address_table = 0x0116
+
+                    if desc_type > 1 and not self.ignore_auth:
                         auth_level = yield from protocol.apci_authenticate(
                             target,
                             key=self.auth_key)
                         if auth_level > 0:
-                            LOGGER.error('Invalid authentication key')
-                    else:
-                        group_address_table = 0x0116
+                            raise KnxTunnelException('Invalid authentication key')
 
                     ret = yield from protocol.apci_memory_read(
                         target,
@@ -574,15 +578,21 @@ class KnxMap(object):
     @asyncio.coroutine
     def scan(self, targets=None, desc_timeout=2, desc_retries=2, bus_timeout=2,
              bus_targets=None, bus_info=False, knx_source=None, auth_key=0xffffffff,
-             configuration_reads=True):
+             configuration_reads=True, ignore_auth=False):
         """The function that will be called by run_until_complete(). This is the main coroutine."""
-        self.auth_key = auth_key
+        if not isinstance(auth_key, int):
+            try:
+                auth_key = int(auth_key, 16)
+                self.auth_key = auth_key
+            except ValueError:
+                LOGGER.debug('Invalid key, using the default')
         self.configuration_reads = configuration_reads
         self.knx_source = knx_source
         self.desc_timeout = desc_timeout
         self.desc_retries = desc_retries
         self.bus_timeout = bus_timeout
         self.bus_info = bus_info
+        self.ignore_auth = ignore_auth
         if targets:
             self.set_targets(targets)
         if self.medium == 'net':
@@ -674,12 +684,11 @@ class KnxMap(object):
             if 'KNXnet/IP Routing' not in knx_gateway.supported_services:
                 LOGGER.error('KNX gateway {gateway} does not support Routing'.format(
                     gateway=knx_gateway.host))
-
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.setblocking(0)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, struct.pack('256s', str.encode(self.iface)))
-
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE,
+                            struct.pack('256s', str.encode(self.iface)))
             # TODO: what if we have devices that access more advanced payloads?
             if isinstance(value, str):
                 value = int(value)
@@ -687,7 +696,6 @@ class KnxMap(object):
             waiter = asyncio.Future(loop=self.loop)
             transport = self.loop._make_datagram_transport(
                 sock, protocol, ('224.0.23.12', 3671), waiter)
-
             try:
                 # Wait until connection_made() has been called on the transport
                 yield from waiter
@@ -695,22 +703,18 @@ class KnxMap(object):
                 LOGGER.error('Creating multicast transport failed!')
                 transport.close()
                 return
-
         else:
             # Use KNX Tunnelling to write group values
             if 'KNXnet/IP Tunnelling' not in knx_gateway.supported_services:
                 LOGGER.error('KNX gateway {gateway} does not support Routing'.format(
                     gateway=knx_gateway.host))
-
             future = asyncio.Future()
             transport, protocol = yield from self.loop.create_datagram_endpoint(
                 functools.partial(KnxTunnelConnection, future),
                 remote_addr=(knx_gateway.host, knx_gateway.port))
             self.bus_protocols.append(protocol)
-
             # Make sure the tunnel has been established
             connected = yield from future
-
             if connected:
                 # TODO: what if we have devices that access more advanced payloads?
                 if isinstance(value, str):
