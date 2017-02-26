@@ -140,8 +140,7 @@ class KnxMap(object):
                         knx_address=response.dib_dev_info.get('knx_address'),
                         device_serial=response.dib_dev_info.get('knx_device_serial'),
                         friendly_name=response.dib_dev_info.get('device_friendly_name'),
-                        device_status=knxmap.utils.make_runstate_printable(
-                            response.dib_dev_info.get('device_status')),
+                        device_status=response.dib_dev_info.get('device_status'),
                         knx_medium=response.dib_dev_info.get('knx_medium'),
                         project_install_identifier=response.dib_dev_info.get('project_install_identifier'),
                         supported_services=[
@@ -386,12 +385,12 @@ class KnxMap(object):
                             manufacturer = knxmap.utils.get_manufacturer_by_id(manufacturer)
 
                         # Read the device state
-                        device_state = yield from protocol.apci_memory_read(
+                        device_state_data = yield from protocol.apci_memory_read(
                             target,
                             memory_address=0x0060)
-                        if device_state:
-                            properties['DEVICE_STATE'] = CemiFrame.unpack_cemi_runstate(
-                                int.from_bytes(device_state, 'big'))
+                        if device_state_data:
+                            device_state = CemiFrame.unpack_cemi_runstate(
+                                int.from_bytes(device_state_data, 'big'))
 
                         # Read the serial number object on System 2 and System 7 devices
                         serial = yield from protocol.apci_property_value_read(
@@ -423,11 +422,11 @@ class KnxMap(object):
                             manufacturer = int.from_bytes(manufacturer, 'big')
                             manufacturer = knxmap.utils.get_manufacturer_by_id(manufacturer)
 
-                        device_state = yield from protocol.apci_memory_read(
+                        device_state_data = yield from protocol.apci_memory_read(
                             target,
                             memory_address=0x0060)
-                        if device_state:
-                            properties['DEVICE_STATE'] = codecs.encode(device_state, 'hex')
+                        if device_state_data:
+                            device_state = codecs.encode(device_state_data, 'hex')
 
                         ret = yield from protocol.apci_memory_read(
                             target,
@@ -485,7 +484,6 @@ class KnxMap(object):
                         target,
                         memory_address=group_address_table,
                         read_count=1)
-
                     if ret and int.from_bytes(ret, 'big') > 1:
                         byte_count = (int.from_bytes(ret, 'big') * 2) + 1
                         address_table = yield from protocol.apci_memory_read(
@@ -506,6 +504,7 @@ class KnxMap(object):
                             type=desc_type,
                             version=desc_version,
                             device_serial=serial,
+                            device_state=device_state,
                             manufacturer=manufacturer,
                             properties=properties)
                         self.bus_devices.add(t)

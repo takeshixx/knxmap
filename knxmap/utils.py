@@ -39,7 +39,6 @@ def parse_knx_group_address(address):
     return '{}/{}/{}'.format((address >> 11) & 0x1f, (address >> 8) & 0x7, address & 0xff)
 
 
-
 def pack_knx_group_address(address):
     """Pack KNX group address.
 
@@ -100,6 +99,8 @@ def get_manufacturer_by_id(mid):
 
 def make_runstate_printable(runstate):
     _runstate = collections.OrderedDict()
+    if isinstance(runstate, bytes):
+        runstate = unpack_cemi_runstate(runstate)
     for k, v in runstate.items():
         if k == 'PROG_MODE':
             _runstate['Programming Mode'] = 'ENABLED' if v else 'disabled'
@@ -116,3 +117,20 @@ def make_runstate_printable(runstate):
         elif k == 'BC_DM':
             _runstate['BC DM'] = v
     return _runstate
+
+
+def unpack_cemi_runstate(data):
+    """Parse runstate field to a dict."""
+    if isinstance(data, bytes):
+        data = int.from_bytes(data, 'big')
+    state = collections.OrderedDict()
+    state['PROG_MODE'] = (data >> 0) & 1
+    state['LINK_LAYER'] = (data >> 1) & 1
+    state['TRANSPORT_LAYER'] = (data >> 2) & 1
+    state['APP_LAYER'] = (data >> 3) & 1
+    state['SERIAL_INTERFACE'] = (data >> 4) & 1
+    state['USER_APP'] = (data >> 5) & 1
+    state['BC_DM'] = (data >> 6) & 1
+    # We don't really care about the parity
+    # state['parity'] = (data >> 7) & 1
+    return state

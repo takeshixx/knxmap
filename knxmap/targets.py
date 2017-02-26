@@ -7,6 +7,7 @@ import logging
 
 from knxmap.data.constants import *
 from knxmap.messages import KnxMessage
+from knxmap.utils import make_runstate_printable
 
 __all__ = ['Targets',
            'KnxTargets',
@@ -175,12 +176,14 @@ class KnxTargetReport(object):
 
 class KnxBusTargetReport(object):
     def __init__(self, address, medium=None, type=None, version=None,
-                 device_serial=None, manufacturer=None, properties=None):
+                 device_serial=None, manufacturer=None, properties=None,
+                 device_state=None):
         self.address = address
         self.medium = medium
         self.type = type
         self.version = version
         self.device_serial = device_serial
+        self.device_state = device_state
         self.manufacturer = manufacturer
         self.properties = properties
 
@@ -206,19 +209,18 @@ def print_knx_target(knx_target):
     o['KNX Medium'] = KNX_MEDIUMS.get(knx_target.knx_medium)
     if knx_target.manufacturer:
         o['Manufacturer'] = knx_target.manufacturer
-    o['Device Friendly Name'] = binascii.b2a_qp(knx_target.friendly_name.strip().replace(b'\x00', b'')).decode()
-    o['Device Status'] = knx_target.device_status
+    o['Device Friendly Name'] = binascii.b2a_qp(
+        knx_target.friendly_name.strip().replace(b'\x00', b'')).decode()
+    o['Device Status'] = make_runstate_printable(knx_target.device_status)
     o['Project Install Identifier'] = knx_target.project_install_identifier
     o['Supported Services'] = knx_target.supported_services
     if knx_target.bus_devices:
         o['Bus Devices'] = []
-
         # Sort the device list based on KNX addresses
         x = {}
         for i in knx_target.bus_devices:
             x[KnxMessage.pack_knx_address(str(i))] = i
         bus_devices = collections.OrderedDict(sorted(x.items()))
-
         for k, d in bus_devices.items():
             _d = {}
             _d[d.address] = collections.OrderedDict()
@@ -231,6 +233,9 @@ def print_knx_target(knx_target):
             if hasattr(d, 'device_serial') and \
                     not isinstance(d.device_serial, (type(None), type(False))):
                 _d[d.address]['Device Serial'] = d.device_serial
+            if hasattr(d, 'device_state') and \
+                    not isinstance(d.device_state, (type(None), type(False))):
+                _d[d.address]['Device State'] = make_runstate_printable(d.device_state)
             if hasattr(d, 'manufacturer') and \
                     not isinstance(d.manufacturer, (type(None), type(False))):
                 _d[d.address]['Manufacturer'] = d.manufacturer
