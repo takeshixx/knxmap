@@ -83,6 +83,9 @@ pscan.add_argument(
 pscan.add_argument(
     '--bus-timeout', action='store', dest='bus_timeout', type=int,
     default=2, help='waiting time (in seconds) for deferred NDP messages')
+pscan.add_argument(
+    '--ignore-auth', action='store_true', dest='ignore_auth',
+    default=False, help='ignore authorization')
 
 psearch = SUBARGS.add_parser('search',
                              help='search for KNXnet/IP gateways on the local network')
@@ -234,6 +237,7 @@ def main():
                 bus_info=args.bus_info,
                 knx_source=args.knx_source,
                 auth_key=args.auth_key,
+                ignore_auth=args.ignore_auth,
                 configuration_reads=args.configuration_reads))
     except KeyboardInterrupt:
         for t in asyncio.Task.all_tasks():
