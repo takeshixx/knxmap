@@ -301,7 +301,6 @@ class KnxTunnellingRequest(KnxMessage):
         self.cemi_frame = cemi
         self.pack_knx_message()
 
-    # TODO: TEST
     def apci_group_value_write(self, value=0):
         """A_GroupValue_Write"""
         cemi = CemiFrame()

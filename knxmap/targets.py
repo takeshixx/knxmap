@@ -247,8 +247,6 @@ def print_knx_target(knx_target):
                 _d[d.address]['Properties'] = d.properties
             o['Bus Devices'].append(_d)
 
-    print()
-
     def print_fmt(d, indent=0):
         for key, value in d.items():
             if indent is 0:
@@ -259,7 +257,7 @@ def print_knx_target(knx_target):
                 else:
                     print('   ' * indent + str(key) + ': ')
             else:
-                print('   ' * indent + str(key) + ': ', end="", flush=True)
+                print('   ' * indent + str(key) + ': ', end='', flush=True)
 
             if key == 'Bus Devices':
                 print()
@@ -275,5 +273,6 @@ def print_knx_target(knx_target):
             else:
                 print(value)
 
+    print()
     print_fmt(out)
     print()

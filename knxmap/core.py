@@ -433,7 +433,7 @@ class KnxMap(object):
                             memory_address=0x0105,
                             read_count=2)
                         if ret:
-                            properties['DevTyp'] = codecs.encode(ret, 'hex')
+                            properties['Device Type'] = codecs.encode(ret, 'hex')
 
                         ret = yield from protocol.apci_memory_read(
                             target,
@@ -454,7 +454,7 @@ class KnxMap(object):
                             memory_address=0x01FE,
                             read_count=1)
                         if ret:
-                            properties['UsrPrg'] = codecs.encode(ret, 'hex')
+                            properties['User Program'] = codecs.encode(ret, 'hex')
 
                         start_addr = 0x0100
                         properties['EEPROM_DUMP'] = b''
