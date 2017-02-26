@@ -35,7 +35,7 @@ class Apci(object):
         apci_type_len = len(bin(self.apci_type)[2:])
         data_space = 10 - apci_type_len
         if len(bin(self.apci_type)[2:]) < 10:
-            while len(bin(self.apci_type)[2:]) < 10:
+            while len(bin(self.apci_type)[2:]) < 8:
                 self.apci_type *= 2
         apci |= self.apci_type << 0
         if self.apci_data:
