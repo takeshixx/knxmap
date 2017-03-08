@@ -374,6 +374,7 @@ class KnxMap(object):
 
                     dev_desc = struct.unpack('!H', descriptor)[0]
                     desc_medium, desc_type, desc_version = knxmap.utils.parse_device_descriptor(dev_desc)
+                    device_state = None
 
                     if desc_type > 1:
                         # Read System 2 and System 7 manufacturer ID object
