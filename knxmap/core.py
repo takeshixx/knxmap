@@ -39,7 +39,7 @@ class KnxMap(object):
     def __init__(self, targets=None, max_workers=100, max_connections=1,
                  loop=None, medium='net', configuration_reads=True,
                  bus_timeout=2, iface=False, auth_key=0xffffffff,
-                 testing=False, ignore_auth=False):
+                 testing=False, ignore_auth=False, nat_mode=False):
         self.loop = loop or asyncio.get_event_loop()
         # The number of concurrent workers
         # for discovering KNXnet/IP gateways
@@ -72,6 +72,7 @@ class KnxMap(object):
         self.iface = iface
         self.testing = testing
         self.ignore_auth = ignore_auth
+        self.nat_mode = nat_mode
         if targets:
             self.set_targets(targets)
         else:
@@ -97,7 +98,7 @@ class KnxMap(object):
             target = list(target)[0]
         future = asyncio.Future()
         transport, protocol = yield from self.loop.create_datagram_endpoint(
-            functools.partial(KnxTunnelConnection, future),
+            functools.partial(KnxTunnelConnection, future, nat_mode=self.nat_mode),
             remote_addr=(knx_gateway[0], knx_gateway[1]))
         self.bus_protocols.append(protocol)
         # Make sure the tunnel has been established
@@ -126,7 +127,8 @@ class KnxMap(object):
                     LOGGER.debug('Sending {}. KnxDescriptionRequest to {}'.format(_try, target))
                     future = asyncio.Future()
                     yield from self.loop.create_datagram_endpoint(
-                        functools.partial(KnxGatewayDescription, future, timeout=self.desc_timeout),
+                        functools.partial(KnxGatewayDescription, future,
+                                          timeout=self.desc_timeout, nat_mode=self.nat_mode),
                         remote_addr=target)
                     response = yield from future
                     if response:
@@ -158,7 +160,8 @@ class KnxMap(object):
                                 future,
                                 connection_type=_CONNECTION_TYPES.get('DEVICE_MGMT_CONNECTION'),
                                 ndp_defer_time=self.bus_timeout,
-                                knx_source=self.knx_source),
+                                knx_source=self.knx_source,
+                                nat_mode=self.nat_mode),
                             remote_addr=target)
                         self.bus_protocols.append(bus_protocol)
                         # Make sure the tunnel has been established
@@ -479,7 +482,10 @@ class KnxMap(object):
                             target,
                             key=self.auth_key)
                         if auth_level > 0:
-                            raise KnxTunnelException('Invalid authentication key')
+                            yield from protocol.tpci_disconnect(target)
+                            queue.task_done()
+                            LOGGER.error('Invalid authentication key for target %s' % target)
+                            continue
 
                     ret = yield from protocol.apci_memory_read(
                         target,
@@ -532,7 +538,8 @@ class KnxMap(object):
                 KnxTunnelConnection,
                 future,
                 ndp_defer_time=self.bus_timeout,
-                knx_source=self.knx_source),
+                knx_source=self.knx_source,
+                nat_mode=self.nat_mode),
             remote_addr=(knx_gateway.host, knx_gateway.port))
         connected = yield from future
         if connected:
@@ -710,7 +717,7 @@ class KnxMap(object):
                     gateway=knx_gateway.host))
             future = asyncio.Future()
             transport, protocol = yield from self.loop.create_datagram_endpoint(
-                functools.partial(KnxTunnelConnection, future),
+                functools.partial(KnxTunnelConnection, future, nat_mode=self.nat_mode),
                 remote_addr=(knx_gateway.host, knx_gateway.port))
             self.bus_protocols.append(protocol)
             # Make sure the tunnel has been established
@@ -750,7 +757,8 @@ class KnxMap(object):
 
         future = asyncio.Future()
         transport, protocol = yield from self.loop.create_datagram_endpoint(
-            functools.partial(KnxTunnelConnection, future, knx_source=self.knx_source),
+            functools.partial(KnxTunnelConnection, future,
+                              knx_source=self.knx_source, nat_mode=self.nat_mode),
             remote_addr=(knx_gateway.host, knx_gateway.port))
         self.bus_protocols.append(protocol)
 

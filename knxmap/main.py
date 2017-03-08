@@ -63,6 +63,9 @@ ARGS.add_argument(
 ARGS.add_argument(
     '--medium', action='store', default='net',
     help='authorization key for System 2 and System 7 devices')
+ARGS.add_argument(
+    '--nat', action='store_true', dest='nat_mode',
+    default=False, help='NAT mode')
 
 pscan = SUBARGS.add_parser('scan', help='scan KNXnet/IP gateways and attached bus devices',
                            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -185,11 +188,13 @@ def main():
         knxmap = KnxMap(targets=targets.targets,
                         max_workers=args.workers,
                         max_connections=args.connections,
-                        medium=args.medium)
+                        medium=args.medium,
+                        nat_mode=args.nat_mode)
     else:
         knxmap = KnxMap(max_workers=args.workers,
                         max_connections=args.connections,
-                        medium=args.medium)
+                        medium=args.medium,
+                        nat_mode=args.nat_mode)
     try:
         if args.cmd == 'search':
             if not args.iface:

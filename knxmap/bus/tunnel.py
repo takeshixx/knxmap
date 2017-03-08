@@ -18,7 +18,8 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
     connection is always used if the bus destination is a physical KNX address."""
 
     def __init__(self, future, connection_type=0x04, layer_type='TUNNEL_LINKLAYER',
-                 ndp_defer_time=2, knx_source=None, tunnel_timeout=4, loop=None):
+                 ndp_defer_time=2, knx_source=None, tunnel_timeout=4, loop=None,
+                 nat_mode=False):
         self.future = future
         self.connection_type = connection_type
         self.layer_type = layer_type
@@ -35,6 +36,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         self.response_queue = []
         self.ndp_defer_time = ndp_defer_time
         self.tunnel_timeout = tunnel_timeout
+        self.nat_mode = nat_mode
         self.wait = None
 
     def connection_made(self, transport):
@@ -45,7 +47,10 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         * Schedule response queue polling"""
         self.transport = transport
         self.peername = self.transport.get_extra_info('peername')
-        self.sockname = self.transport.get_extra_info('sockname')
+        if self.nat_mode:
+            self.sockname = ('0.0.0.0', 0)
+        else:
+            self.sockname = self.transport.get_extra_info('sockname')
         connect_request = KnxConnectRequest(
             sockname=self.sockname,
             connection_type=self.connection_type,

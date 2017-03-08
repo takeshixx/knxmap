@@ -56,7 +56,7 @@ class KnxGatewaySearch(asyncio.DatagramProtocol):
 
 class KnxGatewayDescription(asyncio.DatagramProtocol):
     """Protocol implementation for KNXnet/IP description requests."""
-    def __init__(self, future, loop=None, timeout=2):
+    def __init__(self, future, loop=None, timeout=2, nat_mode=False):
         self.future = future
         self.loop = loop or asyncio.get_event_loop()
         self.transport = None
@@ -64,13 +64,17 @@ class KnxGatewayDescription(asyncio.DatagramProtocol):
         self.sockname = None
         self.wait = None
         self.timeout = timeout
+        self.nat_mode = nat_mode
 
     def connection_made(self, transport):
         self.transport = transport
         self.peername = self.transport.get_extra_info('peername')
         self.sockname = self.transport.get_extra_info('sockname')
         self.wait = self.loop.call_later(self.timeout, self.connection_timeout)
-        packet = KnxDescriptionRequest(sockname=self.sockname)
+        if self.nat_mode:
+            packet = KnxDescriptionRequest(sockname=('0.0.0.0', 0))
+        else:
+            packet = KnxDescriptionRequest(sockname=self.sockname)
         LOGGER.trace_outgoing(packet)
         self.transport.sendto(packet.get_message())
 
