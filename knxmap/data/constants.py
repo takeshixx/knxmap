@@ -183,7 +183,8 @@ KNX_STATUS_CODES = {
     # CONNECT_RESPONSE status codes
     0x22: 'E_CONNECTION_TYPE',  # requested connection type not supported
     0x23: 'E_CONNECTION_OPTION',  # one or more connection options not supported
-    0x24: 'E_NO_MORE_CONNECTIONS',  # max amount of connections reached,
+    0x24: 'E_NO_MORE_CONNECTIONS',  # max amount of connections reached
+    0x25: 'E_NO_MORE_UNIQUE_CONNECTIONS',
     # CONNECTIONSTATE_RESPONSE status codes
     0x21: 'E_CONNECTION_ID',
     0x26: 'E_DATA_CONNECTION',
