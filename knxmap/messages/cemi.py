@@ -36,6 +36,15 @@ class CemiFrame(object):
     def _unpack_stream(fmt, stream):
         try:
             buf = stream.read(struct.calcsize(fmt))
+            if not buf:
+                # In case we already reached EOF
+                # just return an empty byte string.
+                return b''
+            if len(buf) != struct.calcsize(fmt):
+                # If read() returned some bytes, but
+                # not as much as required by fmt,
+                # unpack only the available bytes.
+                fmt = '!{}s'.format(len(buf))
             return struct.unpack(fmt, buf)[0]
         except struct.error as e:
             LOGGER.exception(e)
