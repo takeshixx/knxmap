@@ -131,7 +131,7 @@ class KnxTargets(object):
             return False
         if (parts[0] < 0 or parts[0] > 15) or (parts[1] < 0 or parts[1] > 15):
             return False
-        if len(parts) ==s 3:
+        if len(parts) == 3:
             if parts[2] < 0 or parts[2] > 255:
                 return False
         return True
