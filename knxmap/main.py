@@ -43,7 +43,7 @@ ARGS.add_argument(
     '-p', action='store', dest='port', type=int,
     default=3671, help='target UDP port')
 ARGS.add_argument(
-    '-i', action='store', dest='iface',
+    '-i', '--interface', action='store', dest='iface',
     default=None, help='network interface')
 ARGS.add_argument(
     '--workers', action='store', type=int, metavar='N',
