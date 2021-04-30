@@ -8,11 +8,11 @@ import functools
 from knxmap import KnxMap, Targets, KnxTargets
 from knxmap.misc import setup_logger
 
-# asyncio requires at least Python 3.3
+# asyncio requires at least Python 3.4
 if sys.version_info.major < 3 or \
         (sys.version_info.major > 2 and
-         sys.version_info.minor < 3):
-    print('At least Python version 3.3 is required to run this script!')
+         sys.version_info.minor < 4):
+    print('At least Python version 3.4 is required to run this script!')
     sys.exit(1)
 try:
     # Python 3.4 ships with asyncio in the standard libraries. Users of Python 3.3
