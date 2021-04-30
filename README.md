@@ -9,7 +9,7 @@ KNXmap heavily relies on the [asyncio](https://docs.python.org/3/library/asyncio
 ## Usage
 
 ```
-python setup.py install
+sudo python setup.py install
 knxmap -h
 ```
 

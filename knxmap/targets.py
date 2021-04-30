@@ -112,7 +112,7 @@ class KnxTargets(object):
             parts = [int(i) for i in address.split('.')]
         except ValueError:
             return False
-        if len(parts) is not 3:
+        if len(parts) != 3:
             return False
         if (parts[0] < 1 or parts[0] > 15) or (parts[1] < 0 or parts[1] > 15):
             return False
@@ -131,7 +131,7 @@ class KnxTargets(object):
             return False
         if (parts[0] < 0 or parts[0] > 15) or (parts[1] < 0 or parts[1] > 15):
             return False
-        if len(parts) is 3:
+        if len(parts) == 3:
             if parts[2] < 0 or parts[2] > 255:
                 return False
         return True
@@ -249,7 +249,7 @@ def print_knx_target(knx_target):
 
     def print_fmt(d, indent=0):
         for key, value in d.items():
-            if indent is 0:
+            if indent == 0:
                 print('   ' * indent + str(key))
             elif isinstance(value, (dict, collections.OrderedDict)):
                 if not len(value.keys()):
@@ -265,7 +265,7 @@ def print_knx_target(knx_target):
                     print_fmt(i, indent + 1)
             elif isinstance(value, list):
                 for i, v in enumerate(value):
-                    if i is 0:
+                    if i == 0:
                         print()
                     print('   ' * (indent + 1) + str(v))
             elif isinstance(value, (dict, collections.OrderedDict)):

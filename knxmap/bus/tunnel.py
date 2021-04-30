@@ -154,11 +154,11 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
         knx_msg.set_peer(addr)
         LOGGER.trace_incoming(knx_msg)
         knx_service_type = knx_msg.header.get('service_type') >> 8
-        if knx_service_type is 0x02:  # Core
+        if knx_service_type == 0x02:  # Core
             self.handle_core_services(knx_msg)
-        elif knx_service_type is 0x03:  # Device Management
+        elif knx_service_type == 0x03:  # Device Management
             self.handle_configuration_services(knx_msg)
-        elif knx_service_type is 0x04:  # Tunnelling
+        elif knx_service_type == 0x04:  # Tunnelling
             self.handle_tunnel_services(knx_msg)
         else:
             LOGGER.error('Service not implemented: {}'.format(
@@ -284,7 +284,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
                 if cemi_tpci_type == CEMI_TPCI_TYPES.get('UCD'):
                     # TODO: will this even happen?
                     # TODO: doesn't it need to use knx_src instead of knx_dst?
-                    if knx_msg.cemi.tpci.status is 1:
+                    if knx_msg.cemi.tpci.status == 1:
                         # TODO: why checking status here? pls document why
                         if knx_dst in self.target_futures.keys():
                             if not self.target_futures[knx_dst].done():
