@@ -57,7 +57,8 @@ class KnxBusMonitor(KnxTunnelConnection):
         elif isinstance(knx_message, KnxTunnellingRequest):
             self.print_message(knx_message)
             if CEMI_PRIMITIVES[knx_message.cemi.message_code] == 'L_Data.con' or \
-                    CEMI_PRIMITIVES[knx_message.cemi.message_code] == 'L_Data.ind':
+                    CEMI_PRIMITIVES[knx_message.cemi.message_code] == 'L_Data.ind' or \
+                    CEMI_PRIMITIVES[knx_message.cemi.message_code] == 'L_Busmon.ind':
                 tunnelling_ack = KnxTunnellingAck(
                     communication_channel=knx_message.communication_channel,
                     sequence_count=knx_message.sequence_counter)
