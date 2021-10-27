@@ -347,7 +347,7 @@ class KnxTunnelConnection(asyncio.DatagramProtocol):
 
         elif isinstance(knx_msg, KnxTunnellingAck):
             # TODO: do we have to increase any sequence here?
-            LOGGER.debug('Tunnelling ACK reqceived')
+            LOGGER.debug('Tunnelling ACK received')
             if knx_msg.status:
                 LOGGER.error('An error occured during frame transmission')
         else:
