@@ -168,6 +168,9 @@ pbrute.add_argument(
 pbrute.add_argument(
     '--full-key-space', action='store_true', dest='full_key_space',
     default=False, help='bruteforce the full key space (0 - 0xffffffff)')
+pbrute.add_argument(
+    '--wordlist', default=None, help='Wordlist of keys in hex')
+
 
 pmonitor = SUBARGS.add_parser('monitor', help='Monitor bus and group messages',
                               formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -230,7 +233,8 @@ def main():
             bus_target = KnxTargets(args.bus_target)
             loop.run_until_complete(knxmap.brute(
                 bus_target=bus_target.targets,
-                full_key_space=args.full_key_space))
+                full_key_space=args.full_key_space,
+                wordlist=args.wordlist))
         elif args.cmd == 'scan':
             LOGGER.info('Scanning {} target(s)'.format(len(targets.targets)))
             bus_targets = KnxTargets(args.bus_targets)
