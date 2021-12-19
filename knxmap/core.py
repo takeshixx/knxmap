@@ -115,7 +115,7 @@ class KnxMap(object):
                         LOGGER.error('Key {} is not a valid hex value'.format(line))                
         elif full_key_space:
             key_space = range(0, 0xffffffff)
-        else:            
+        else:
             key_space = [0x11223344, 0x12345678, 0x00000000, 0x87654321, 0x11111111, 0xffffffff]
 
         # Bruteforce the key via A_Authorize_Request messages
