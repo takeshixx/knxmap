@@ -83,7 +83,8 @@ class BasicTests(unittest.TestCase):
         try:
             self.loop.run_until_complete(self.knxmap.brute(
                 bus_target=bus_targets.targets,
-                full_key_space=False))
+                full_key_space=False,
+                wordlist=None))
         except KnxTunnelException as e:
             self.fail(e.message)
 

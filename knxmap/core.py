@@ -93,7 +93,7 @@ class KnxMap(object):
         return self.bus_queues[gateway]
 
     @asyncio.coroutine
-    def bruteforce_auth_key(self, knx_gateway, target, full_key_space=False):
+    def bruteforce_auth_key(self, knx_gateway, target, full_key_space=False, wordlist=None):
         if isinstance(target, set):
             target = list(target)[0]
         future = asyncio.Future()
@@ -104,10 +104,20 @@ class KnxMap(object):
         # Make sure the tunnel has been established
         connected = yield from future
         alive = yield from protocol.tpci_connect(target)
-        if full_key_space:
+        if wordlist: 
+            key_space = []
+            with open(wordlist, 'r') as f:
+                for line in f.readlines():
+                    line = line.rstrip()                   
+                    try: 
+                        key_space.append(int('0x' + line, 0))
+                    except ValueError: 
+                        LOGGER.error('Key {} is not a valid hex value'.format(line))                
+        elif full_key_space:
             key_space = range(0, 0xffffffff)
         else:
             key_space = [0x11223344, 0x12345678, 0x00000000, 0x87654321, 0x11111111, 0xffffffff]
+
         # Bruteforce the key via A_Authorize_Request messages
         for key in key_space:
             access_level = yield from protocol.apci_authenticate(target, key)
@@ -328,10 +338,10 @@ class KnxMap(object):
         LOGGER.info('Searching done')
 
     @asyncio.coroutine
-    def brute(self, targets=None, bus_target=None, full_key_space=False):
+    def brute(self, targets=None, bus_target=None, full_key_space=False, wordlist=None):
         if targets:
             self.set_targets(targets)
-        tasks = [asyncio.Task(self.bruteforce_auth_key(t, bus_target, full_key_space),
+        tasks = [asyncio.Task(self.bruteforce_auth_key(t, bus_target, full_key_space, wordlist),
                               loop=self.loop) for t in self.targets]
         yield from asyncio.wait(tasks)
 
