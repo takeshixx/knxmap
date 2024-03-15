@@ -6,11 +6,18 @@ A tool for scanning and auditing KNXnet/IP gateways on IP driven networks. KNXne
 
 KNXmap heavily relies on the [asyncio](https://docs.python.org/3/library/asyncio.html) module and therefore requires Python 3.4 or newer. There are just a few optional dependencies that are required for some special features.
 
-## Usage
-
+## Install
 ```
-python setup.py install
-knxmap -h
+sudo apt-get install python3.11-venv
+python3 -m venv .venv
+pip install pipenv
+pipenv sync
+```
+
+## Usage
+```
+. .venv/bin/activate
+# python main.py -h
 ```
 
 ## Documentation

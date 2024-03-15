@@ -1,0 +1,5 @@
+[packages]
+asyncio = ">=3.4.3"
+
+[requires]
+python_version = ">=3.11.2"
